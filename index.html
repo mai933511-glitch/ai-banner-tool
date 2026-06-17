@@ -90,6 +90,7 @@
     <label>クライアント</label>
     <select id="clientSelect"></select>
     <button id="openAI" style="border-color:var(--accent2);color:var(--accent2)">🤖 AIで作成</button>
+    <button id="openShare" style="border-color:var(--accent);color:var(--accent)">🔁 共有</button>
     <button id="addClient">＋ 空で追加</button>
     <button id="renameClient">名称変更</button>
     <button id="delClient" class="danger">削除</button>
@@ -230,6 +231,28 @@
     <label><span class="step">STEP 2</span>ChatGPTが返したJSONを貼り付け</label>
     <textarea id="jsonIn" style="min-height:92px" placeholder='{ "client": "...", "brand": {...}, "presets": [...] }'></textarea>
     <button class="btn-primary" id="importJson" style="margin-top:10px">✅ このクライアントを作成（ブランド＋プリセット自動生成）</button>
+  </div>
+</div>
+
+<!-- ナレッジ共有 モーダル -->
+<div id="shareModal" class="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>🔁 ナレッジ共有（プリセット・ブランド・改善ルール）</h3>
+      <button id="closeShare" class="btn-ghost" style="padding:4px 10px">✕</button>
+    </div>
+    <p class="hint">共有するのは<b>知見だけ</b>（個人の検証ログは含めません）。書き出したJSONをNotionの共有ページに貼り、各自が読み込むと<b>全員の資産がマージ（合算）</b>されます。これで改善ルールの属人化が解けます。</p>
+
+    <label><span class="step">書き出し</span>全クライアントの知見をJSONで出力 → Notion共有ページに貼る</label>
+    <pre id="shareOut" style="max-height:200px;overflow:auto">「書き出す」を押すと、ここにJSONが出ます。</pre>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-ghost" id="genShare" style="flex:1">⬆ 書き出す</button>
+      <button class="btn-ghost copy-btn" data-copy="shareOut" style="flex:1">📋 コピー</button>
+    </div>
+
+    <label style="margin-top:14px"><span class="step">読み込み</span>共有ページのJSONを貼って取り込み（自分の資産に合算）</label>
+    <textarea id="shareIn" style="min-height:92px" placeholder='{ "type": "banner-tool-knowledge", "clients": {...} }'></textarea>
+    <button class="btn-primary" id="importShare" style="margin-top:10px">⬇ 取り込む（合算する）</button>
   </div>
 </div>
 
@@ -571,6 +594,65 @@ $("importJson").addEventListener("click", ()=>{
   $("svcInfo").value=""; $("setupPrompt").textContent="↑ 情報を入れて生成。"; $("jsonIn").value="";
   renderClientSelect(); loadClientIntoForm();
   alert(`「${name}」をブランド設定＋プリセット${presets.length}件付きで作成しました！`);
+});
+
+// ---------- ナレッジ共有（知見のみ書き出し/読み込み・属人化解消） ----------
+const shareModal = $("shareModal");
+$("openShare").addEventListener("click", ()=>{ shareModal.style.display="flex"; });
+$("closeShare").addEventListener("click", ()=>{ shareModal.style.display="none"; });
+shareModal.addEventListener("click", e=>{ if(e.target===shareModal) shareModal.style.display="none"; });
+
+$("genShare").addEventListener("click", ()=>{
+  const clients = {};
+  for(const [name,c] of Object.entries(state.clients)){
+    clients[name] = { brand:c.brand, presets:c.presets, rules:c.rules }; // ログ・draftは含めない
+  }
+  $("shareOut").textContent = JSON.stringify({
+    type:"banner-tool-knowledge", version:1, exportedAt:new Date().toISOString().slice(0,10), clients
+  }, null, 2);
+});
+
+function uniqPush(arr, val){ if(val && !arr.includes(val)) arr.push(val); }
+
+$("importShare").addEventListener("click", ()=>{
+  const raw = $("shareIn").value.trim();
+  if(!raw){ alert("共有ページのJSONを貼り付けてください"); return; }
+  const s=raw.indexOf("{"), e=raw.lastIndexOf("}");
+  if(s<0||e<0){ alert("JSONが見つかりません"); return; }
+  let data; try{ data = JSON.parse(raw.slice(s,e+1)); }
+  catch(err){ alert("JSONの読み取りに失敗しました。\n("+err.message+")"); return; }
+  if(!data.clients || typeof data.clients!=="object"){ alert("clients が含まれていません。書き出したJSONをそのまま貼ってください。"); return; }
+
+  let newClients=0, addedPresets=0, addedRules=0;
+  for(const [name,inc] of Object.entries(data.clients)){
+    if(!state.clients[name]){
+      // 新規クライアントごと取り込み
+      state.clients[name] = {
+        brand: inc.brand || {tone:"",keywords:"",colors:"",ng:""},
+        draft: { target:(inc.presets&&inc.presets[0]?.target)||"", axis:(inc.presets&&inc.presets[0]?.axis)||"",
+          value:(inc.presets&&inc.presets[0]?.value)||"", visual:(inc.presets&&inc.presets[0]?.visual)||"",
+          ratio:"1:1 (1080x1080) 正方形", count:"5", offer:"" },
+        presets: inc.presets ? inc.presets.slice() : [],
+        rules: { copy:(inc.rules?.copy||[]).slice(), image:(inc.rules?.image||[]).slice() },
+        logs: []
+      };
+      newClients++;
+      addedPresets += state.clients[name].presets.length;
+      addedRules += state.clients[name].rules.copy.length + state.clients[name].rules.image.length;
+    } else {
+      // 既存にマージ（合算・重複除去）
+      const c = state.clients[name];
+      (inc.presets||[]).forEach(p=>{ if(!c.presets.some(x=>x.name===p.name)){ c.presets.push(p); addedPresets++; } });
+      (inc.rules?.copy||[]).forEach(r=>{ const n=c.rules.copy.length; uniqPush(c.rules.copy,r); if(c.rules.copy.length>n) addedRules++; });
+      (inc.rules?.image||[]).forEach(r=>{ const n=c.rules.image.length; uniqPush(c.rules.image,r); if(c.rules.image.length>n) addedRules++; });
+      // ブランドは空欄のみ補完（既存を壊さない）
+      for(const k of ["tone","keywords","colors","ng"]) if(!c.brand[k] && inc.brand?.[k]) c.brand[k]=inc.brand[k];
+    }
+  }
+  save();
+  shareModal.style.display="none"; $("shareIn").value="";
+  renderClientSelect(); loadClientIntoForm();
+  alert(`取り込み完了！\n新規クライアント: ${newClients}件\n追加プリセット: ${addedPresets}件\n追加ルール: ${addedRules}件`);
 });
 
 // ---------- 起動 ----------
