@@ -106,14 +106,16 @@
       <p class="hint" style="margin-top:8px">選ぶと下の項目に流し込まれます。あとは自由に上書きOK。<br>新しい型は「型として保存」で追加できます。</p>
     </div>
 
-    <h2>② 条件（自由入力）</h2>
+    <h2>② 条件（蓄積から選ぶ or 自由入力）</h2>
     <div class="field">
-      <label>ターゲット</label>
-      <input id="target" placeholder="例: 医療脱毛を検討中の20-30代女性">
+      <label>ターゲット（▼で蓄積から選択／新規は入力）</label>
+      <input id="target" list="targetOptions" placeholder="例: 医療脱毛を検討中の20-30代女性">
+      <datalist id="targetOptions"></datalist>
     </div>
     <div class="field">
-      <label>訴求軸</label>
-      <input id="axis" placeholder="例: 安心・信頼 / 効果実感 / 価格">
+      <label>訴求軸（▼で蓄積から選択／新規は入力）</label>
+      <input id="axis" list="axisOptions" placeholder="例: 安心・信頼 / 効果実感 / 価格">
+      <datalist id="axisOptions"></datalist>
     </div>
     <div class="field">
       <label>伝えたい価値（任意）</label>
@@ -345,6 +347,21 @@ function renderRuleList(kind){
   });
 }
 function renderRules(){ renderRuleList("copy"); renderRuleList("image"); }
+
+// 蓄積（プリセット＋検証ログ）から 訴求軸・ターゲットの候補を作る（表記ゆれ防止＝標準化）
+function fillDatalist(id, values){
+  const dl = $(id); dl.innerHTML = "";
+  [...new Set(values.filter(v=>v && v.trim()))].forEach(v=>{
+    const o = document.createElement("option"); o.value = v; dl.appendChild(o);
+  });
+}
+function renderSuggestions(){
+  const c = client();
+  const axes = [...c.presets.map(p=>p.axis), ...c.logs.map(l=>l.axis)];
+  const targets = [...c.presets.map(p=>p.target), ...c.logs.map(l=>l.target)];
+  fillDatalist("axisOptions", axes);
+  fillDatalist("targetOptions", targets);
+}
 function addRule(kind, inputId){
   const v = $(inputId).value.trim(); if(!v) return;
   client().rules[kind].push(v); $(inputId).value=""; save(); renderRuleList(kind); generate();
@@ -361,7 +378,7 @@ function loadClientIntoForm(){
   const c = client();
   for(const [id,key] of Object.entries(BRAND_FIELDS)) $(id).value = c.brand[key] || "";
   DRAFT_FIELDS.forEach(f=>{ if($(f)) $(f).value = c.draft[f] || ""; });
-  renderPresetSelect(); renderLogs(); renderRules(); generate();
+  renderPresetSelect(); renderLogs(); renderRules(); renderSuggestions(); generate();
 }
 
 // 入力 → アクティブクライアントへ保存
@@ -383,7 +400,7 @@ $("savePreset").addEventListener("click", ()=>{
   const name = prompt("この型の名前は？", `${axis}×${target.slice(0,8)}`);
   if(!name) return;
   client().presets.push({ name, target, axis, value:$("value").value, visual:$("visual").value });
-  save(); renderPresetSelect();
+  save(); renderPresetSelect(); renderSuggestions();
 });
 
 // ---------- クライアント追加/改名/削除 ----------
@@ -497,7 +514,7 @@ function renderLogs(){
 }
 $("save_log").addEventListener("click", ()=>{
   if(!current){ alert("先に「プロンプトを生成」を押してください"); return; }
-  client().logs.unshift({ ...current, ctr:"",cpa:"",cvr:"",memo:"" }); save(); renderLogs();
+  client().logs.unshift({ ...current, ctr:"",cpa:"",cvr:"",memo:"" }); save(); renderLogs(); renderSuggestions();
 });
 
 // ---------- 出力 ----------
