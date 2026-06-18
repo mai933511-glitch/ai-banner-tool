@@ -66,6 +66,10 @@
   .copy-btn { font-size:11px; padding:6px 12px; }
   .copied { background:var(--accent2) !important; color:#fff !important; border-color:var(--accent2) !important; }
   .hint { font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.6; }
+  #logwrap { overflow-x:auto; }
+  #logwrap table { min-width:840px; }
+  #logwrap td:nth-child(2) { min-width:130px; }
+  #logwrap th:first-child, #logwrap td:first-child { white-space:nowrap; }
   table { width:100%; border-collapse:collapse; font-size:12.5px; }
   th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
   th { font-family:var(--mono); color:var(--muted); font-weight:500; font-size:10px; text-transform:uppercase; letter-spacing:.07em; }
@@ -97,6 +101,16 @@
   .rule-list li { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; font-size:12.5px;
     padding:9px 11px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; margin-bottom:6px; color:var(--text2); }
   .rule-list .empty-r { background:none; border:none; color:var(--muted); padding:6px 0; }
+  /* 自動判定バッジ ＆ 提案 */
+  .judge { display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px; white-space:nowrap; }
+  .j-good { background:#e7f7ef; color:#0a7d54; border:1px solid #b9e9d2; }
+  .j-mid  { background:#fff7e6; color:#9a6b00; border:1px solid #ffe2a8; }
+  .j-bad  { background:#fdecec; color:#c0392b; border:1px solid #f7c5c2; }
+  .j-na   { background:var(--panel2); color:var(--muted); border:1px solid var(--line); }
+  .propose { margin-top:6px; font-size:10px; font-weight:600; padding:4px 8px; background:#fff;
+    border:1px solid var(--line); border-radius:6px; cursor:pointer; color:var(--accent); white-space:nowrap; }
+  .propose:hover { border-color:var(--accent); }
+  .ktable td { color:var(--text); }
 </style>
 </head>
 <body>
@@ -173,6 +187,14 @@
       <div class="field"><label>世界観キーワード（カンマ区切り）</label><input id="b_keywords"></div>
       <div class="field"><label>メインカラー（カンマ区切り）</label><input id="b_colors"></div>
       <div class="field"><label>禁止表現</label><input id="b_ng"></div>
+      <div class="field"><label>業種・ジャンル（業種ナレッジの集計キー）</label>
+        <input id="c_industry" list="industryOptions" placeholder="例: 美容医療 / 不動産 / EC / SaaS"><datalist id="industryOptions"></datalist></div>
+      <div class="row field">
+        <div><label>目標CTR%（任意）</label><input id="t_ctr" placeholder="例: 1.5"></div>
+        <div><label>目標CPA¥（任意）</label><input id="t_cpa" placeholder="例: 3000"></div>
+        <div><label>目標CVR%（任意）</label><input id="t_cvr" placeholder="例: 5"></div>
+      </div>
+      <p class="hint" style="padding-bottom:6px">目標値が判定の基準になります（未入力ならクライアント平均と比較）。</p>
     </details>
 
     <button class="btn-primary" id="gen" style="margin-top:14px">⚡ プロンプトを生成</button>
@@ -229,6 +251,12 @@
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="card-head"><h3>📚 業種ナレッジ <span class="scope" id="scopeName4"></span></h3></div>
+      <p class="hint">同じ業種のクライアントを横断して「どの訴求が数値が良いか」を自動集計。クライアントを跨いだ"勝ち筋"の資産です（🔁共有で他人のデータも合算）。</p>
+      <div id="knowledgeBox"></div>
+    </div>
   </main>
 </div>
 
@@ -275,6 +303,20 @@
   </div>
 </div>
 
+<!-- 次のクリエイティブ提案 モーダル -->
+<div id="propModal" class="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="propHead">💡 次のクリエイティブ提案</h3>
+      <button id="closeProp" class="btn-ghost" style="padding:4px 10px">✕</button>
+    </div>
+    <p class="hint" id="propDiag"></p>
+    <label>このプロンプトをChatGPTに貼ると、次に試すバナー3案が出ます</label>
+    <pre id="propPrompt" style="max-height:340px;overflow:auto">—</pre>
+    <button class="btn-ghost copy-btn" data-copy="propPrompt" style="width:100%;margin-top:10px">📋 提案プロンプトをコピー</button>
+  </div>
+</div>
+
 <script>
 const $ = id => document.getElementById(id);
 const BRAND_FIELDS = { b_tone:"tone", b_keywords:"keywords", b_colors:"colors", b_ng:"ng" };
@@ -303,6 +345,7 @@ function seed(){
           copy: ["数字や具体時間を入れると刺さる（例: 30分で）", "「誰でも」より「ノンデザイナーでも」の方が自分ごと化されてCTR高い"],
           image: ["人物は入れず、作業画面/ツールのモチーフの方が反応が良い", "余白は広めに取る"]
         },
+        industry:"AI/デザイン", targets:{ctr:"",cpa:"",cvr:""},
         logs: []
       },
       "美容クリニックA（例）": {
@@ -323,6 +366,7 @@ function seed(){
           copy: ["「医師監修」を頭に置くと安心感でCTRが上がる"],
           image: ["清潔感と肌の透明感を最優先、淡いピンク背景が好反応", "過度な加工感は避ける"]
         },
+        industry:"美容医療", targets:{ctr:"",cpa:"",cvr:""},
         logs: []
       }
     }
@@ -333,7 +377,8 @@ function seed(){
 let state;
 function load(){ try{ state = JSON.parse(localStorage.getItem("bt_v2")); }catch(e){} if(!state || !state.clients) state = seed();
   // 後方互換: rules欄が無いクライアントに空ルールを補完
-  Object.values(state.clients).forEach(c=>{ if(!c.rules) c.rules={copy:[],image:[]}; if(!c.rules.copy) c.rules.copy=[]; if(!c.rules.image) c.rules.image=[]; }); }
+  Object.values(state.clients).forEach(c=>{ if(!c.rules) c.rules={copy:[],image:[]}; if(!c.rules.copy) c.rules.copy=[]; if(!c.rules.image) c.rules.image=[];
+    if(c.industry==null) c.industry=""; if(!c.targets) c.targets={ctr:"",cpa:"",cvr:""}; }); }
 function save(){ localStorage.setItem("bt_v2", JSON.stringify(state)); }
 const client = () => state.clients[state.active];
 
@@ -395,13 +440,17 @@ function loadClientIntoForm(){
   const c = client();
   for(const [id,key] of Object.entries(BRAND_FIELDS)) $(id).value = c.brand[key] || "";
   DRAFT_FIELDS.forEach(f=>{ if($(f)) $(f).value = c.draft[f] || ""; });
-  renderPresetSelect(); renderLogs(); renderRules(); renderSuggestions(); generate();
+  $("c_industry").value = c.industry || "";
+  $("t_ctr").value = c.targets.ctr || ""; $("t_cpa").value = c.targets.cpa || ""; $("t_cvr").value = c.targets.cvr || "";
+  renderPresetSelect(); renderLogs(); renderRules(); renderSuggestions(); renderIndustryOptions(); renderKnowledge(); generate();
 }
 
 // 入力 → アクティブクライアントへ保存
 function wireInputs(){
   for(const id of Object.keys(BRAND_FIELDS)) $(id).addEventListener("input", ()=>{ client().brand[BRAND_FIELDS[id]] = $(id).value; save(); });
   DRAFT_FIELDS.forEach(f=> $(f).addEventListener("input", ()=>{ client().draft[f] = $(f).value; save(); }));
+  $("c_industry").addEventListener("input", ()=>{ client().industry = $("c_industry").value; save(); renderIndustryOptions(); renderKnowledge(); });
+  ["ctr","cpa","cvr"].forEach(k=> $("t_"+k).addEventListener("change", ()=>{ client().targets[k] = $("t_"+k).value; save(); renderLogs(); }));
 }
 
 // ---------- プリセット ----------
@@ -428,7 +477,7 @@ $("addClient").addEventListener("click", ()=>{
   state.clients[name] = {
     brand:{tone:"",keywords:"",colors:"",ng:""},
     draft:{target:"",axis:"",value:"",visual:"",ratio:"1:1 (1080x1080) 正方形",count:"5",offer:""},
-    presets:[], rules:{copy:[],image:[]}, logs:[]
+    presets:[], rules:{copy:[],image:[]}, industry:"", targets:{ctr:"",cpa:"",cvr:""}, logs:[]
   };
   state.active = name; save(); renderClientSelect(); loadClientIntoForm();
 });
@@ -508,25 +557,117 @@ document.querySelectorAll(".copy-btn[data-copy]").forEach(b=>{
   });
 });
 
-// ---------- 検証ログ（クライアント別） ----------
+// ---------- 自動判定（④）：数値→◎◯△＋診断 ----------
+function num(v){ const n=parseFloat(v); return isNaN(n)?null:n; }
+function computeRefs(c){
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const ctrs=c.logs.map(l=>num(l.ctr)).filter(v=>v!=null);
+  const cvrs=c.logs.map(l=>num(l.cvr)).filter(v=>v!=null);
+  const cpas=c.logs.map(l=>num(l.cpa)).filter(v=>v!=null);
+  const t=c.targets||{};
+  return { ctr: num(t.ctr) ?? avg(ctrs), cvr: num(t.cvr) ?? avg(cvrs), cpa: num(t.cpa) ?? avg(cpas) };
+}
+function judge(l, ref){
+  const ctr=num(l.ctr);
+  if(ctr==null || ref.ctr==null) return {grade:"—",label:"未測定",cls:"j-na",diag:"CTRを入力すると自動診断します",branch:"na"};
+  if(ctr >= ref.ctr*1.15) return {grade:"◎",label:"良い",cls:"j-good",diag:"CTRが基準より高い勝ちパターン。横展開でスケール",branch:"win"};
+  if(ctr >= ref.ctr*0.85){
+    const cvr=num(l.cvr);
+    if(cvr!=null && ref.cvr!=null && cvr < ref.cvr*0.85)
+      return {grade:"◯",label:"普通",cls:"j-mid",diag:"CTRは並だがCVRが低い→LP/整合性が要因",branch:"lp"};
+    return {grade:"◯",label:"普通",cls:"j-mid",diag:"平均的。フック/訴求の磨き込み余地あり",branch:"mid"};
+  }
+  return {grade:"△",label:"要改善",cls:"j-bad",diag:"CTRが基準より低い→クリエイティブ（バナー/コピー）が弱い",branch:"ctr"};
+}
+
+// ---------- 次のクリエイティブ提案（⑤） ----------
+function buildProposal(l){
+  const c=client(), b=c.brand, ref=computeRefs(c), j=judge(l,ref);
+  let head, ask;
+  if(j.branch==="win"){ head="🏆 勝ちパターンの横展開"; ask="この勝ちパターン（ターゲットと世界観）は維持しつつ、訴求軸だけを変えた“別訴求の派生バナー”を提案してください。"; }
+  else if(j.branch==="lp"){ head="🔧 LP/整合性の改善"; ask="バナーとLPのメッセージを一致させCVRを上げる方向で、新しいバナーコピー案と、LPファーストビューの見出し改善案をセットで提案してください。"; }
+  else if(j.branch==="ctr"){ head="✏️ フック刷新"; ask="フック（最初の一言）と訴求軸を変えて、CTRを引き上げる新しいバナーコピーを提案してください。"; }
+  else { head="🔁 磨き込み"; ask="訴求の切り口を変えた改善バナーを提案してください。"; }
+  const prompt=
+`あなたは広告クリエイティブのプランナーです。以下の結果を踏まえ、次に試すバナーを提案してください。
+
+# ブランド
+- クライアント：${state.active}（業種：${c.industry||"未設定"}）
+- トーン＆マナー：${b.tone||"（未設定）"}
+- 世界観キーワード：${b.keywords||"（未設定）"}
+- 禁止表現：${b.ng||"（未設定）"}
+
+# 元バナーの結果
+- ターゲット：${l.target}
+- 訴求軸：${l.axis}
+- 数値：CTR ${l.ctr||"-"}% / CVR ${l.cvr||"-"}% / CPA ${l.cpa||"-"}円
+- 自動診断：${j.diag}
+
+# 依頼
+${ask}
+
+# 出力
+- 次に試すバナー案を3つ（各：メインコピー13文字以内＋サブ20文字以内＋狙い）
+- それぞれ「元から変えた1要素」を明記（A/Bで検証できるように）`;
+  return {head, j, prompt};
+}
+function openProposal(l){
+  const {head, j, prompt}=buildProposal(l);
+  $("propHead").textContent=head;
+  $("propDiag").textContent=`判定：${j.grade} ${j.label} ／ ${j.diag}`;
+  $("propPrompt").textContent=prompt;
+  $("propModal").style.display="flex";
+}
+$("closeProp").addEventListener("click", ()=>$("propModal").style.display="none");
+$("propModal").addEventListener("click", e=>{ if(e.target===$("propModal")) $("propModal").style.display="none"; });
+
+// ---------- 業種ナレッジ（⑥）：同業クライアント横断で勝ち訴求を集計 ----------
+function renderIndustryOptions(){
+  fillDatalist("industryOptions", Object.values(state.clients).map(c=>c.industry).filter(Boolean));
+}
+function renderKnowledge(){
+  const c=client(), ind=c.industry||"", box=$("knowledgeBox");
+  $("scopeName4").textContent = ind ? "— "+ind : "— 業種未設定";
+  if(!ind){ box.innerHTML='<div class="empty">「③ブランド設計」で業種を設定すると、同じ業種のクライアント横断で勝ちパターンを集計します。</div>'; return; }
+  const sameIndustry = Object.values(state.clients).filter(cl=>(cl.industry||"")===ind);
+  const rows=[];
+  sameIndustry.forEach(cl=> cl.logs.forEach(l=>{ const ctr=num(l.ctr); if(ctr!=null) rows.push({axis:l.axis, ctr}); }));
+  if(!rows.length){ box.innerHTML=`<div class="empty">業種「${ind}」の実測データはまだありません（対象${sameIndustry.length}社）。広告を回してCTRを入力すると、勝ち訴求が自動ランキングされます。</div>`; return; }
+  const byAxis={}; rows.forEach(r=>{ (byAxis[r.axis]=byAxis[r.axis]||[]).push(r.ctr); });
+  const ranked=Object.entries(byAxis).map(([axis,a])=>({axis, avg:a.reduce((x,y)=>x+y,0)/a.length, n:a.length})).sort((x,y)=>y.avg-x.avg);
+  let h=`<p class="hint">業種「<b>${ind}</b>」｜対象${sameIndustry.length}社・実測${rows.length}件から集計（CTR平均が高い訴求＝勝ち筋）</p>`;
+  h+=`<table class="ktable"><thead><tr><th>順位</th><th>訴求軸</th><th>平均CTR%</th><th>件数</th></tr></thead><tbody>`;
+  ranked.forEach((r,i)=>{ h+=`<tr><td>${i+1}</td><td><span class="pill">${r.axis}</span></td><td style="font-weight:700;color:var(--text)">${r.avg.toFixed(2)}</td><td>${r.n}</td></tr>`; });
+  h+=`</tbody></table><p class="hint" style="margin-top:10px">💡 新規クライアントは、この上位の訴求軸から試すと勝率が上がります。</p>`;
+  box.innerHTML=h;
+}
+
+// ---------- 検証ログ（クライアント別／自動判定つき） ----------
 function renderLogs(){
-  const logs = client().logs, w = $("logwrap");
+  const c=client(), logs=c.logs, w=$("logwrap");
   if(!logs.length){ w.innerHTML='<div class="empty">まだ記録がありません。生成 →「＋ 今の生成を記録」で蓄積します。</div>'; return; }
+  const ref=computeRefs(c);
   let h=`<table><thead><tr><th>日付</th><th>ターゲット</th><th>訴求軸</th><th>比率</th>
-    <th>CTR%</th><th>CPA¥</th><th>CVR%</th><th>考察</th><th></th></tr></thead><tbody>`;
-  logs.forEach((l,i)=>{ h+=`<tr>
+    <th>CTR%</th><th>CPA¥</th><th>CVR%</th><th>判定 ＆ 次の提案</th><th>考察</th><th></th></tr></thead><tbody>`;
+  logs.forEach((l,i)=>{ const j=judge(l,ref); h+=`<tr>
     <td>${l.date}</td><td>${l.target}</td><td><span class="pill">${l.axis}</span></td><td>${l.ratio}</td>
     <td><input class="num" data-i="${i}" data-k="ctr" value="${l.ctr||''}"></td>
     <td><input class="num" data-i="${i}" data-k="cpa" value="${l.cpa||''}"></td>
     <td><input class="num" data-i="${i}" data-k="cvr" value="${l.cvr||''}"></td>
+    <td><span class="judge ${j.cls}" title="${j.diag}">${j.grade} ${j.label}</span><br>
+        <button class="propose" data-prop="${i}">💡 次の提案</button></td>
     <td><input data-i="${i}" data-k="memo" value="${(l.memo||'').replace(/"/g,'&quot;')}" placeholder="何が良かった/悪かった"></td>
     <td><button class="del" data-del="${i}">✕</button></td></tr>`; });
   h+=`</tbody></table>`; w.innerHTML=h;
-  w.querySelectorAll("input").forEach(inp=> inp.addEventListener("input", e=>{
-    client().logs[e.target.dataset.i][e.target.dataset.k]=e.target.value; save();
-  }));
+  w.querySelectorAll("input").forEach(inp=>{
+    inp.addEventListener("input", e=>{ client().logs[e.target.dataset.i][e.target.dataset.k]=e.target.value; save(); });
+    inp.addEventListener("change", e=>{ if(e.target.dataset.k!=="memo"){ renderLogs(); renderKnowledge(); } });
+  });
   w.querySelectorAll(".del").forEach(btn=> btn.addEventListener("click", e=>{
-    client().logs.splice(e.target.dataset.del,1); save(); renderLogs();
+    client().logs.splice(e.target.dataset.del,1); save(); renderLogs(); renderKnowledge();
+  }));
+  w.querySelectorAll(".propose").forEach(btn=> btn.addEventListener("click", e=>{
+    openProposal(client().logs[e.target.dataset.prop]);
   }));
 }
 $("save_log").addEventListener("click", ()=>{
@@ -573,6 +714,7 @@ ${info}
 # 出力形式（重要：下記のJSONだけを出力。前後の説明文・コードフェンスは一切つけない）
 {
   "client": "クライアント名（簡潔に）",
+  "industry": "業種・ジャンル（例: 美容医療 / 不動産 / EC / SaaS など短く）",
   "brand": {
     "tone": "トーン＆マナーを1文で",
     "keywords": "世界観キーワードをカンマ区切りで5語",
@@ -621,7 +763,7 @@ $("importJson").addEventListener("click", ()=>{
       target: presets[0].target, axis: presets[0].axis, value: presets[0].value, visual: presets[0].visual,
       ratio:"1:1 (1080x1080) 正方形", count:"5", offer: data.offer||""
     },
-    presets, rules:{copy:[],image:[]}, logs: []
+    presets, rules:{copy:[],image:[]}, industry: data.industry||"", targets:{ctr:"",cpa:"",cvr:""}, logs: []
   };
   state.active = name; save();
   modal.style.display="none";
@@ -639,7 +781,7 @@ shareModal.addEventListener("click", e=>{ if(e.target===shareModal) shareModal.s
 $("genShare").addEventListener("click", ()=>{
   const clients = {};
   for(const [name,c] of Object.entries(state.clients)){
-    clients[name] = { brand:c.brand, presets:c.presets, rules:c.rules }; // ログ・draftは含めない
+    clients[name] = { industry:c.industry, brand:c.brand, presets:c.presets, rules:c.rules }; // ログ・draftは含めない
   }
   $("shareOut").textContent = JSON.stringify({
     type:"banner-tool-knowledge", version:1, exportedAt:new Date().toISOString().slice(0,10), clients
@@ -668,6 +810,7 @@ $("importShare").addEventListener("click", ()=>{
           ratio:"1:1 (1080x1080) 正方形", count:"5", offer:"" },
         presets: inc.presets ? inc.presets.slice() : [],
         rules: { copy:(inc.rules?.copy||[]).slice(), image:(inc.rules?.image||[]).slice() },
+        industry: inc.industry||"", targets:{ctr:"",cpa:"",cvr:""},
         logs: []
       };
       newClients++;
@@ -681,6 +824,7 @@ $("importShare").addEventListener("click", ()=>{
       (inc.rules?.image||[]).forEach(r=>{ const n=c.rules.image.length; uniqPush(c.rules.image,r); if(c.rules.image.length>n) addedRules++; });
       // ブランドは空欄のみ補完（既存を壊さない）
       for(const k of ["tone","keywords","colors","ng"]) if(!c.brand[k] && inc.brand?.[k]) c.brand[k]=inc.brand[k];
+      if(!c.industry && inc.industry) c.industry=inc.industry;
     }
   }
   save();
