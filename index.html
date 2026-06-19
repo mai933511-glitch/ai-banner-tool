@@ -124,7 +124,24 @@
             <input class="tool-input" id="tone" placeholder="例: 清潔感・信頼・上品。落ち着いたトーン"></div>
           <div class="tool-field"><label class="tool-label">禁止表現（使用禁止ワード）</label>
             <input class="tool-input" id="ng" placeholder="例: 絶対, No.1, 100%, 必ず痩せる"></div>
-          <p class="hint">ここはクライアント別に保存され、生成プロンプトの「ブランド」項目に反映されます。配色（03）もブランドカラーとして保存されます。</p>
+          <div class="tool-field"><label class="tool-label">禁止事項（やってはいけないこと）</label>
+            <input class="tool-input" id="prohibitions" placeholder="例: 競合名を出さない / 効果を保証しない / 顔を大きく映さない"></div>
+          <div class="tool-field"><label class="tool-label">デザインのトンマナ（フォント）</label>
+            <div class="tool-ratio-select-group" id="brandFontGroup" style="max-width:380px">
+              <button type="button" class="tool-ratio-btn" data-v="ゴシック体（モダン・力強い）">ゴシック</button>
+              <button type="button" class="tool-ratio-btn" data-v="明朝体（上品・知的）">明朝</button>
+              <button type="button" class="tool-ratio-btn" data-v="">指定なし</button>
+            </div></div>
+          <div class="tool-field">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <label class="tool-label" style="margin:0">ブランドカラー（決まっている場合）</label>
+              <button type="button" class="tool-add-btn" id="brandColorToggle"></button>
+            </div>
+            <div class="tool-color-grid" id="brandColorGrid"></div>
+            <div class="tool-color-preview" id="brandColorPreview"></div>
+            <p class="hint" id="brandColorHint"></p>
+          </div>
+          <p class="hint">クライアント別に保存され、生成プロンプトの「ブランド」「デザイン仕様」に反映されます。フォント・配色を指定すると、03の設定より<b>このクライアント情報が優先</b>されます。</p>
         </div>
       </div>
 
@@ -205,6 +222,7 @@
             <label class="tool-label">配色設定</label>
             <div class="tool-color-grid" id="colorGrid"></div>
             <div class="tool-color-preview" id="colorPreview"></div>
+            <p class="hint" id="colorNote"></p>
           </div>
         </div>
       </div>
@@ -273,11 +291,13 @@ const OPT = {
 };
 const RATIO = ["小","中","大","特大"];
 const PALETTE = ["#000000","#111111","#333333","#525252","#737373","#A3A3A3","#E5E5E5","#FFFFFF"];
-const SIMPLE_FIELDS = ["industry","tone","ng","audienceProblem","coreValue","mainCopy","subCopy","eyecatch","background","layout","style","font","size"];
+const SIMPLE_FIELDS = ["industry","tone","ng","prohibitions","audienceProblem","coreValue","mainCopy","subCopy","eyecatch","background","layout","style","font","size"];
 
 function defaultClient(){
   return {
     industry:"AI/デザイン", tone:"信頼感がありつつ親しみやすい。誇張せず等身大で実用的", ng:"絶対, No.1, 誰でも稼げる, 100%, 過度な煽り",
+    prohibitions:"", brandFont:"",
+    brandColorSet:false, brandBase:"#FFFFFF", brandMain:"#111111", brandAccent:"#737373",
     audienceProblem:"AIに興味はあるが、何から始めればいいかわからない初心者",
     coreValue:"専門知識がなくても、AIで広告クリエイティブを作れる",
     mainCopy:"AIでゼロからデザインする方法", subCopy:"誰でも簡単にサムネイルを作れるデザイナーに",
@@ -299,6 +319,8 @@ function load(){
     state = { active:"自分（AI Design Lab）", clients:{ "自分（AI Design Lab）": defaultClient(),
       "美容クリニックA（例）": Object.assign(defaultClient(), {
         industry:"美容医療", tone:"清潔感・信頼・上品。安心して任せられる落ち着いたトーン", ng:"絶対安全, 100%, 必ず痩せる, 誇大な効果保証",
+        prohibitions:"効果を保証しない / 症例写真を加工しすぎない", brandFont:"明朝体（上品・知的）",
+        brandColorSet:true, brandBase:"#FFFFFF", brandMain:"#3A3A3A", brandAccent:"#C9A86A",
         audienceProblem:"競合にAI活用で遅れを取りたくない経営者", coreValue:"短時間で伝わるバナーやサムネイルの方向性を固められる",
         mainCopy:"医師監修で安心の医療脱毛", subCopy:"初回カウンセリングは無料",
         supplements:["初回限定キャンペーン中"], eyecatch:"PCを手に持つ女性（日本人、20代）のクローズアップ",
@@ -360,6 +382,46 @@ function renderColors(){
   $("colorGrid").querySelectorAll("input").forEach(inp=>{ inp.value = cur()[inp.dataset.k]; });
   $("colorPreview").innerHTML =
     `<div style="background:${cur().baseColor};flex:7"></div><div style="background:${cur().mainColor};flex:2.5"></div><div style="background:${cur().accentColor};flex:.5"></div>`;
+  $("colorNote").textContent = cur().brandColorSet
+    ? "⚠️ クライアント情報のブランドカラーが指定されているため、生成時はそちらが優先されます（この03設定は使われません）。"
+    : "";
+}
+
+/* ---------- クライアント：ブランドフォント（明朝/ゴシック/指定なし） ---------- */
+function buildBrandFont(){
+  $("brandFontGroup").querySelectorAll(".tool-ratio-btn").forEach(b=> b.addEventListener("click", ()=>{
+    cur().brandFont = b.dataset.v; save(); renderBrandFont();
+  }));
+}
+function renderBrandFont(){
+  $("brandFontGroup").querySelectorAll(".tool-ratio-btn").forEach(b=> b.classList.toggle("active", b.dataset.v===(cur().brandFont||"")));
+}
+
+/* ---------- クライアント：ブランドカラー（指定する/しない） ---------- */
+function buildBrandColors(){
+  const cols=[["ベース","brandBase","70%"],["メイン","brandMain","25%"],["アクセント","brandAccent","5%"]];
+  $("brandColorGrid").innerHTML = cols.map(([lab,k,r])=>`<div class="tool-color-picker">
+    <div class="tool-color-picker-header"><span class="tool-color-label">${lab}</span><span class="tool-color-ratio">${r}</span></div>
+    <div class="tool-color-input-row">
+      <input type="color" class="tool-color-swatch" data-k="${k}">
+      <input type="text" class="tool-input tool-color-hex" data-k="${k}">
+    </div></div>`).join("");
+  $("brandColorGrid").querySelectorAll("input").forEach(inp=> inp.addEventListener("input", ()=>{
+    cur()[inp.dataset.k]=inp.value; save(); renderBrandColors();
+  }));
+  $("brandColorToggle").addEventListener("click", ()=>{ cur().brandColorSet = !cur().brandColorSet; save(); renderBrandColors(); renderColors(); });
+}
+function renderBrandColors(){
+  const on = cur().brandColorSet;
+  $("brandColorGrid").style.display = on ? "grid" : "none";
+  $("brandColorPreview").style.display = on ? "flex" : "none";
+  $("brandColorToggle").textContent = on ? "✕ 指定しない（クリア）" : "＋ 色を指定する";
+  $("brandColorHint").textContent = on ? "この配色が03より優先されます。" : "未指定（「選択しない」状態）。生成時は03の配色設定を使います。";
+  if(on){
+    $("brandColorGrid").querySelectorAll("input").forEach(inp=>{ inp.value = cur()[inp.dataset.k]; });
+    $("brandColorPreview").innerHTML =
+      `<div style="background:${cur().brandBase};flex:7"></div><div style="background:${cur().brandMain};flex:2.5"></div><div style="background:${cur().brandAccent};flex:.5"></div>`;
+  }
 }
 
 /* ---------- 動的リスト（補足・装飾） ---------- */
@@ -409,7 +471,7 @@ function renderClientSelect(){
 function loadClient(){
   const c=cur();
   SIMPLE_FIELDS.forEach(f=> $(f).value = c[f]||"");
-  renderSupp(); renderDeco(); renderRatio(); renderColors(); renderRules();
+  renderSupp(); renderDeco(); renderRatio(); renderBrandFont(); renderBrandColors(); renderColors(); renderRules();
 }
 function wireSimple(){
   SIMPLE_FIELDS.forEach(f=> $(f).addEventListener("input", ()=>{ cur()[f]=$(f).value; save(); }));
@@ -427,7 +489,15 @@ function buildPrompt(){
   if(t.industry) brandLines.push(`- 業種: ${t.industry}`);
   if(t.tone) brandLines.push(`- トーン＆マナー: ${t.tone}`);
   if(t.ng) brandLines.push(`- 禁止表現（使用禁止）: ${t.ng}`);
+  if(t.prohibitions) brandLines.push(`- 禁止事項（やってはいけないこと）: ${t.prohibitions}`);
   const brandBlock = `\n\n## ブランド（このクライアント専用・必ず遵守）\n${brandLines.join("\n")}`;
+
+  // クライアント情報を優先：フォント（明朝/ゴシック）・配色
+  const fontUsed = t.brandFont || t.font;
+  const useBrandColor = t.brandColorSet;
+  const cBase = useBrandColor ? t.brandBase : t.baseColor;
+  const cMain = useBrandColor ? t.brandMain : t.mainColor;
+  const cAccent = useBrandColor ? t.brandAccent : t.accentColor;
 
   // 追加：これまでの学び
   const learn = t.rules.filter(x=>x.trim());
@@ -450,9 +520,9 @@ ${deco?`### 装飾要素\n${deco}\n`:""}
 ## デザイン仕様
 - レイアウト: ${t.layout}
 - スタイル: ${t.style}
-- フォント: ${t.font}
+- フォント: ${fontUsed}
 - 各要素のサイズ比率: ${ratio}
-- 配色: ベース ${t.baseColor}（70%）/ メイン ${t.mainColor}（25%）/ アクセント ${t.accentColor}（5%）
+- 配色: ベース ${cBase}（70%）/ メイン ${cMain}（25%）/ アクセント ${cAccent}（5%）
 - サイズ: ${t.size}${learnBlock}
 
 ## Technical Metadata
@@ -556,7 +626,7 @@ document.querySelectorAll(".copy2[data-copy]").forEach(b=> b.addEventListener("c
 }));
 
 /* ---------- 起動 ---------- */
-load(); buildPresets(); buildRatio(); buildColors(); wireSimple(); renderClientSelect(); loadClient();
+load(); buildPresets(); buildRatio(); buildColors(); buildBrandFont(); buildBrandColors(); wireSimple(); renderClientSelect(); loadClient();
 </script>
 </body>
 </html>
