@@ -3,838 +3,560 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AIバナー量産アシスタント</title>
+<title>Ad Prompt Generator</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-  :root {
-    --bg:#f5f6f8; --panel:#ffffff; --panel2:#f3f4f6; --line:#e6e8ec;
-    --text:#0a0c10; --text2:#585858; --muted:#9298a4;
-    --accent:#3b6cff; --accent-soft:#eef3ff; --accent2:#10b981;
-    --dark:#131313; --yellow:#ffd21e; --warn:#e5484d; --radius:16px;
-    --shadow:0 1px 2px rgba(16,24,40,.04),0 4px 12px rgba(16,24,40,.05);
-    --mono:'Geist Mono',"SF Mono",Menlo,monospace;
-  }
-  * { box-sizing: border-box; }
-  body { margin:0; font-family:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
-    background:var(--bg); color:var(--text2); line-height:1.65; letter-spacing:-.01em; -webkit-font-smoothing:antialiased; }
-  /* ヘッダー（参考デザインの水色ヒーローを踏襲） */
-  header { padding:22px 30px; background:linear-gradient(180deg,#e7f0ff 0%,#ffffff 95%);
-    border-bottom:1px solid var(--line); display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-  header h1 { font-size:23px; font-weight:800; margin:0; color:var(--text); letter-spacing:-.035em; }
-  header .tag { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.1em;
-    color:var(--muted); background:#fff; border:1px solid var(--line); padding:4px 10px; border-radius:99px; }
-  /* クライアントバー */
-  .clientbar { display:flex; align-items:center; gap:8px; margin-left:auto; flex-wrap:wrap; }
-  .clientbar label { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); }
-  .clientbar select { background:#fff; color:var(--text); border:1px solid var(--line);
-    border-radius:10px; padding:9px 12px; font-size:13px; font-weight:700; box-shadow:var(--shadow); }
-  .clientbar button { background:#fff; color:var(--text); border:1px solid var(--line);
-    border-radius:10px; padding:9px 12px; font-size:12px; font-weight:600; cursor:pointer; }
-  .clientbar button:hover { border-color:var(--text); }
-  .clientbar .danger:hover { border-color:var(--warn); color:var(--warn); }
-  .layout { display:grid; grid-template-columns:360px 1fr; min-height:calc(100vh - 71px); }
-  @media (max-width:900px){ .layout{ grid-template-columns:1fr; } }
-  .sidebar { border-right:1px solid var(--line); padding:26px 24px; background:#fff; }
-  .main { padding:26px 30px; max-width:1120px; }
-  /* セクション見出し（モノ大文字＋イエロードット＝ジャンプ率の最下層ラベル） */
-  h2 { font-family:var(--mono); font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.14em;
-    color:var(--muted); margin:0 0 16px; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
-  h2::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--yellow); flex:none;
-    box-shadow:0 0 0 3px rgba(255,210,30,.2); }
-  .field { margin-bottom:16px; }
-  label { display:block; font-size:12px; font-weight:600; color:var(--text); margin-bottom:7px; }
-  select, input, textarea { width:100%; background:#fff; color:var(--text); border:1px solid var(--line);
-    border-radius:10px; padding:10px 12px; font-size:14px; font-family:inherit; }
-  ::placeholder { color:#b6bbc4; }
-  select:focus, input:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
-  textarea { resize:vertical; min-height:60px; }
-  .row { display:flex; gap:8px; } .row > * { flex:1; }
-  button { cursor:pointer; border:none; border-radius:10px; font-size:13px; font-weight:600; padding:11px 16px; font-family:inherit; }
-  .btn-primary { background:var(--dark); color:#fff; width:100%; } .btn-primary:hover { background:#000; }
-  .btn-ghost { background:#fff; color:var(--text); border:1px solid var(--line); } .btn-ghost:hover { border-color:var(--text); }
-  .preset-pick { border:1px solid #dbe4ff; border-radius:12px; padding:14px; margin-bottom:22px; background:var(--accent-soft); }
-  .preset-pick label { color:var(--accent); }
-  details.brand { margin-top:6px; border:1px solid var(--line); border-radius:12px; padding:0 14px; background:#fff; }
-  details.brand summary { cursor:pointer; padding:13px 0; font-size:12px; font-weight:600; color:var(--text); }
-  /* カード */
-  .card { background:#fff; border:1px solid var(--line); border-radius:var(--radius); padding:22px; margin-bottom:18px; box-shadow:var(--shadow); }
-  .card-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:8px; flex-wrap:wrap; }
-  .card-head h3 { margin:0; font-size:19px; font-weight:700; color:var(--text); letter-spacing:-.02em; }
-  /* プロンプト出力（あえてダークブロックで主役として際立たせる＝強いジャンプ率） */
-  pre { background:#0c0e13; border:1px solid #0c0e13; border-radius:12px; padding:16px; white-space:pre-wrap;
-    word-break:break-word; font-size:12.5px; line-height:1.75; color:#e6e9f0; margin:0; font-family:var(--mono); }
-  .copy-btn { font-size:11px; padding:6px 12px; }
-  .copied { background:var(--accent2) !important; color:#fff !important; border-color:var(--accent2) !important; }
-  .hint { font-size:11.5px; color:var(--muted); margin-top:8px; line-height:1.6; }
-  #logwrap { overflow-x:auto; }
-  #logwrap table { min-width:840px; }
-  #logwrap td:nth-child(2) { min-width:130px; }
-  #logwrap th:first-child, #logwrap td:first-child { white-space:nowrap; }
-  table { width:100%; border-collapse:collapse; font-size:12.5px; }
-  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { font-family:var(--mono); color:var(--muted); font-weight:500; font-size:10px; text-transform:uppercase; letter-spacing:.07em; }
-  td { color:var(--text2); }
-  td input { padding:6px 7px; font-size:12.5px; }
-  .num { width:64px; font-weight:700; color:var(--text); }
-  .pill { display:inline-block; font-size:10px; font-weight:600; padding:3px 8px; border-radius:7px; line-height:1.4;
-    background:var(--accent-soft); border:1px solid #dbe4ff; color:var(--accent); }
-  .empty { color:var(--muted); font-size:12.5px; padding:18px 0; text-align:center; }
-  .del { color:var(--warn); background:none; border:none; cursor:pointer; font-size:14px; padding:0 4px; }
-  .toolbar { display:flex; gap:8px; flex-wrap:wrap; }
-  .scope { font-family:var(--mono); font-size:11px; font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0; }
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap');
+  :root{--bg:#fff;--background-alt:#f5f5f5;--fg:#333;--fg-muted:#333333a3;--fg-subtle:#3336;--border:#3333331f;--accent:#111;--font:"Noto Sans JP",sans-serif;--ease:all .5s cubic-bezier(.16,1,.3,1)}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--fg);background:var(--background-alt);-webkit-font-smoothing:antialiased}
+  .k-shell{max-width:860px;margin:0 auto;padding:0 1.25rem}
+  /* ヘッダー */
+  .top{background:var(--fg);color:var(--bg);padding:.9rem 0}
+  .top .k-shell{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+  .top h1{font-size:1rem;font-weight:800;letter-spacing:.04em;margin:0}
+  .clientbar{display:flex;align-items:center;gap:.4rem;margin-left:auto;flex-wrap:wrap}
+  .clientbar label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#ffffffb0}
+  .clientbar select{font-family:var(--font);font-size:12px;font-weight:700;color:var(--fg);background:var(--bg);border:1px solid #ffffff4d;padding:.4rem .6rem;border-radius:0}
+  .clientbar button{font-family:var(--font);font-size:11px;font-weight:600;color:var(--bg);background:0 0;border:1px solid #ffffff4d;padding:.4rem .6rem;cursor:pointer;border-radius:0}
+  .clientbar button:hover{background:#ffffff1a;border-color:var(--bg)}
+  main{padding:1.5rem 0 4rem}
+  /* フォーム（ad-prompt-generator準拠） */
+  .tool-form-card{background:var(--bg);border:1px solid var(--border);overflow:hidden}
+  .tool-form-section{border-bottom:1px solid var(--border)}
+  .tool-form-section:last-of-type{border-bottom:none}
+  .tool-form-section-header{background:var(--fg);color:var(--bg);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem}
+  .tool-section-title-group{display:flex;align-items:center;gap:1rem}
+  .tool-section-number{letter-spacing:.1em;color:var(--bg);border:1px solid #ffffff4d;flex-shrink:0;display:flex;justify-content:center;align-items:center;width:2rem;height:2rem;font-size:11px;font-weight:800}
+  .tool-section-title-group h2{font-size:.78rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;margin:0}
+  .tool-random-btn{letter-spacing:.05em;color:var(--bg);cursor:pointer;background:0 0;border:1px solid #ffffff4d;display:flex;align-items:center;gap:.4rem;padding:.4rem .8rem;font-size:10px;font-weight:700;transition:all .2s}
+  .tool-random-btn:hover{border-color:var(--bg);background:#ffffff1a}
+  .tool-form-section-body{display:flex;flex-direction:column;gap:1.25rem;padding:1.25rem}
+  .tool-field{display:flex;flex-direction:column;gap:.35rem}
+  .tool-label{letter-spacing:.02em;color:var(--fg);font-size:.8rem;font-weight:600;margin-bottom:.25rem}
+  .tool-input{width:100%;font-size:.9rem;font-family:var(--font);color:var(--fg);background:var(--bg);border:1px solid var(--border);appearance:none;border-radius:0;outline:none;padding:.7rem .9rem;transition:border-color .3s}
+  .tool-input::placeholder{color:var(--fg-muted);opacity:.5}
+  .tool-input:focus{border-color:var(--fg)}
+  textarea.tool-input{resize:vertical;min-height:64px;line-height:1.7}
+  .tool-preset-wrapper{width:100%;margin-bottom:.5rem}
+  .tool-preset-select{width:100%;font-size:11px;font-family:var(--font);color:var(--fg-muted);background:var(--bg);border:1px solid var(--border);cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23000' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-position:right .6rem center;background-repeat:no-repeat;outline:none;padding:.4rem 2rem .4rem .6rem;font-weight:500;transition:border-color .3s;border-radius:0}
+  .tool-preset-select:hover{border-color:var(--fg);color:var(--fg)}
+  select.tool-input{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23000' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-position:right .9rem center;background-repeat:no-repeat;padding-right:2.5rem}
+  .tool-dynamic-row{display:flex;align-items:center;gap:.5rem;margin-top:.5rem}
+  .tool-add-btn{font-size:11px;font-weight:600;font-family:var(--font);color:var(--fg-muted);border:1px solid var(--border);cursor:pointer;background:0 0;padding:.3rem .7rem;transition:all .2s}
+  .tool-add-btn:hover{border-color:var(--fg);color:var(--fg)}
+  .tool-remove-btn{width:2rem;height:2rem;color:var(--fg-muted);border:1px solid var(--border);cursor:pointer;background:0 0;flex-shrink:0;display:flex;justify-content:center;align-items:center;font-size:14px;font-weight:600;transition:all .2s}
+  .tool-remove-btn:hover{border-color:var(--fg);color:var(--fg)}
+  /* 比率 */
+  .tool-ratio-grid{background:var(--bg);border:1px solid var(--border);display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-top:.5rem;padding:1rem}
+  .tool-ratio-item{display:flex;flex-direction:column;gap:.4rem}
+  .tool-ratio-label{color:var(--fg-muted);text-transform:uppercase;font-size:10px;font-weight:700}
+  .tool-ratio-select-group{background:var(--border);display:flex;gap:2px;padding:2px}
+  .tool-ratio-btn{background:var(--bg);color:var(--fg-muted);cursor:pointer;border:none;flex:1;padding:.35rem 0;font-size:10px;font-weight:600;transition:all .2s}
+  .tool-ratio-btn.active{background:var(--fg);color:var(--bg)}
+  .tool-ratio-btn:hover:not(.active){color:var(--fg)}
+  /* 配色 */
+  .tool-color-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:.5rem}
+  .tool-color-picker{display:flex;flex-direction:column;gap:.4rem}
+  .tool-color-picker-header{display:flex;justify-content:space-between;align-items:baseline}
+  .tool-color-label{color:var(--fg);font-size:11px;font-weight:600}
+  .tool-color-ratio{color:var(--fg-muted);font-size:10px;font-weight:500}
+  .tool-color-input-row{display:flex;align-items:center;gap:.4rem}
+  .tool-color-swatch{border:1px solid var(--border);cursor:pointer;background:0 0;border-radius:0;flex-shrink:0;width:2rem;height:2rem;padding:0}
+  .tool-color-swatch::-webkit-color-swatch-wrapper{padding:2px}
+  .tool-color-swatch::-webkit-color-swatch{border:none}
+  .tool-color-hex{font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:.35rem .5rem;flex:1}
+  .tool-color-preview{border:1px solid var(--border);height:1.5rem;margin-top:.75rem;display:flex;overflow:hidden}
+  /* 改善ルール */
+  .rule-list{list-style:none;padding:0;margin:.5rem 0 0;display:flex;flex-direction:column;gap:.4rem}
+  .rule-list li{display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;font-size:.82rem;padding:.5rem .7rem;background:var(--background-alt);border:1px solid var(--border)}
+  .rule-list .empty-r{background:0 0;border:none;color:var(--fg-muted);padding:.3rem 0}
+  .hint{font-size:11px;color:var(--fg-muted);line-height:1.6;margin:.2rem 0 0}
+  /* フッター（生成・出力） */
+  .tool-form-footer{border-top:1px solid var(--border);background:var(--bg);padding:1.25rem}
+  .tool-submit-btn{width:100%;font-size:.95rem;font-weight:700;font-family:var(--font);color:var(--fg);background:var(--bg);border:2px solid var(--fg);cursor:pointer;transition:var(--ease);letter-spacing:.02em;border-radius:0;padding:.9rem}
+  .tool-submit-btn:hover{background:var(--fg);color:var(--bg)}
+  .tool-output-card{background:var(--bg);border:2px solid var(--fg);overflow:hidden;margin-top:1.5rem}
+  .tool-output-header{border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;gap:.75rem;flex-wrap:wrap}
+  .tool-output-header h2{font-size:.78rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;margin:0}
+  .tool-copy-btn{font-size:.8rem;font-weight:600;font-family:var(--font);background:var(--bg);color:var(--fg);border:2px solid var(--fg);cursor:pointer;transition:var(--ease);padding:.5rem 1.2rem}
+  .tool-copy-btn:hover{background:var(--fg);color:var(--bg)}
+  .copied{background:var(--fg)!important;color:var(--bg)!important}
+  .tool-output-body{max-height:520px;padding:1.25rem;overflow-y:auto}
+  .tool-output-body pre{color:var(--fg);font-family:'SF Mono','JetBrains Mono',monospace;font-size:.85rem;line-height:1.8;white-space:pre-wrap;word-break:break-word;margin:0}
   /* モーダル */
-  .modal { display:none; position:fixed; inset:0; background:rgba(10,12,16,.5); z-index:50;
-    align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
-  .modal-box { background:#fff; border:1px solid var(--line); border-radius:var(--radius);
-    padding:26px; width:100%; max-width:680px; box-shadow:0 24px 70px rgba(0,0,0,.28); }
-  .modal-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
-  .modal-head h3 { margin:0; font-size:18px; font-weight:700; color:var(--text); letter-spacing:-.02em; }
-  .modal label { display:block; font-size:12px; font-weight:600; color:var(--text); margin:14px 0 6px; }
-  .step { display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600; color:var(--dark);
-    background:var(--yellow); border-radius:6px; padding:2px 8px; margin-right:8px; text-transform:uppercase; letter-spacing:.04em; }
-  /* プロンプト改善ルール */
-  .rules-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
-  @media (max-width:680px){ .rules-grid{ grid-template-columns:1fr; } }
-  .rule-add { display:flex; gap:6px; }
-  .rule-add button { padding:9px 13px; }
-  .rule-list { list-style:none; padding:0; margin:10px 0 0; }
-  .rule-list li { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; font-size:12.5px;
-    padding:9px 11px; background:var(--panel2); border:1px solid var(--line); border-radius:8px; margin-bottom:6px; color:var(--text2); }
-  .rule-list .empty-r { background:none; border:none; color:var(--muted); padding:6px 0; }
-  /* 自動判定バッジ ＆ 提案 */
-  .judge { display:inline-block; font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px; white-space:nowrap; }
-  .j-good { background:#e7f7ef; color:#0a7d54; border:1px solid #b9e9d2; }
-  .j-mid  { background:#fff7e6; color:#9a6b00; border:1px solid #ffe2a8; }
-  .j-bad  { background:#fdecec; color:#c0392b; border:1px solid #f7c5c2; }
-  .j-na   { background:var(--panel2); color:var(--muted); border:1px solid var(--line); }
-  .propose { margin-top:6px; font-size:10px; font-weight:600; padding:4px 8px; background:#fff;
-    border:1px solid var(--line); border-radius:6px; cursor:pointer; color:var(--accent); white-space:nowrap; }
-  .propose:hover { border-color:var(--accent); }
-  .ktable td { color:var(--text); }
+  .modal{display:none;position:fixed;inset:0;background:#0009;z-index:50;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+  .modal-box{background:var(--bg);border:1px solid var(--border);padding:1.5rem;width:100%;max-width:640px}
+  .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
+  .modal-head h3{margin:0;font-size:1rem;font-weight:800}
+  .modal label{display:block;font-size:12px;font-weight:600;margin:.9rem 0 .4rem}
+  .step{display:inline-block;font-size:10px;font-weight:700;color:var(--bg);background:var(--fg);padding:.15rem .5rem;margin-right:.5rem}
+  .modal pre{background:var(--background-alt);border:1px solid var(--border);padding:.8rem;font-size:11.5px;line-height:1.7;white-space:pre-wrap;word-break:break-word;font-family:'SF Mono',monospace}
 </style>
 </head>
 <body>
-<header>
-  <h1>🎯 AIバナー量産アシスタント</h1>
-  <span class="tag">ChatGPTベース / クライアント別 / 数値蓄積</span>
-  <div class="clientbar">
-    <label>クライアント</label>
-    <select id="clientSelect"></select>
-    <button id="openAI" style="border-color:var(--accent2);color:var(--accent2)">🤖 AIで作成</button>
-    <button id="openShare" style="border-color:var(--accent);color:var(--accent)">🔁 共有</button>
-    <button id="addClient">＋ 空で追加</button>
-    <button id="renameClient">名称変更</button>
-    <button id="delClient" class="danger">削除</button>
+<header class="top">
+  <div class="k-shell">
+    <h1>🎯 Ad Prompt Generator</h1>
+    <div class="clientbar">
+      <label>クライアント</label>
+      <select id="clientSelect"></select>
+      <button id="openAI" title="サービス情報からブランドを自動設計">🤖 AI作成</button>
+      <button id="addClient">＋ 追加</button>
+      <button id="renameClient">名称変更</button>
+      <button id="delClient">削除</button>
+    </div>
   </div>
 </header>
 
-<div class="layout">
-  <aside class="sidebar">
-    <h2>① 叩き台プリセットから開始（任意）</h2>
-    <div class="preset-pick">
-      <label>このクライアントのプリセット（業種別の型）</label>
-      <select id="presetSelect"></select>
-      <p class="hint" style="margin-top:8px">選ぶと下の項目に流し込まれます。あとは自由に上書きOK。<br>新しい型は「型として保存」で追加できます。</p>
-    </div>
+<main>
+  <div class="k-shell">
+    <form class="tool-form-card" id="adForm" autocomplete="off">
 
-    <h2>② 条件（蓄積から選ぶ or 自由入力）</h2>
-    <div class="field">
-      <label>ターゲット（▼で蓄積から選択／新規は入力）</label>
-      <input id="target" list="targetOptions" placeholder="例: 医療脱毛を検討中の20-30代女性">
-      <datalist id="targetOptions"></datalist>
-    </div>
-    <div class="field">
-      <label>訴求軸（▼で蓄積から選択／新規は入力）</label>
-      <input id="axis" list="axisOptions" placeholder="例: 安心・信頼 / 効果実感 / 価格">
-      <datalist id="axisOptions"></datalist>
-    </div>
-    <div class="field">
-      <label>伝えたい価値（任意）</label>
-      <input id="value" placeholder="例: 医師監修・症例実績で安心して任せられる">
-    </div>
-    <div class="field">
-      <label>ビジュアルの方向性（任意・画像プロンプトに反映）</label>
-      <input id="visual" placeholder="例: 清潔感のある明るい空間、白と淡いピンク">
-    </div>
-
-    <div class="row field">
-      <div>
-        <label>バナーサイズ</label>
-        <select id="ratio">
-          <option value="1:1 (1080x1080) 正方形">1:1 正方形</option>
-          <option value="4:5 (1080x1350) 縦長フィード">4:5 縦長</option>
-          <option value="9:16 (1080x1920) ストーリーズ/リール">9:16 ストーリーズ</option>
-          <option value="1.91:1 (1200x628) 横長">1.91:1 横長</option>
-        </select>
-      </div>
-      <div>
-        <label>コピー案数</label>
-        <select id="count"><option>3</option><option selected>5</option><option>8</option></select>
-      </div>
-    </div>
-    <div class="field">
-      <label>クリック後のオファー（LPの着地点）</label>
-      <input id="offer" placeholder="例: 初回カウンセリング無料予約">
-    </div>
-
-    <button class="btn-ghost" id="savePreset" style="width:100%;margin-bottom:10px;font-size:12px">＋ いまの条件を「型」として保存</button>
-
-    <details class="brand">
-      <summary>③ ブランド設計（このクライアント専用 / 全プロンプトに反映）</summary>
-      <div class="field" style="margin-top:10px">
-        <label>トーン＆マナー</label><input id="b_tone">
-      </div>
-      <div class="field"><label>世界観キーワード（カンマ区切り）</label><input id="b_keywords"></div>
-      <div class="field"><label>メインカラー（カンマ区切り）</label><input id="b_colors"></div>
-      <div class="field"><label>禁止表現</label><input id="b_ng"></div>
-      <div class="field"><label>業種・ジャンル（業種ナレッジの集計キー）</label>
-        <input id="c_industry" list="industryOptions" placeholder="例: 美容医療 / 不動産 / EC / SaaS"><datalist id="industryOptions"></datalist></div>
-      <div class="row field">
-        <div><label>目標CTR%（任意）</label><input id="t_ctr" placeholder="例: 1.5"></div>
-        <div><label>目標CPA¥（任意）</label><input id="t_cpa" placeholder="例: 3000"></div>
-        <div><label>目標CVR%（任意）</label><input id="t_cvr" placeholder="例: 5"></div>
-      </div>
-      <p class="hint" style="padding-bottom:6px">目標値が判定の基準になります（未入力ならクライアント平均と比較）。</p>
-    </details>
-
-    <button class="btn-primary" id="gen" style="margin-top:14px">⚡ プロンプトを生成</button>
-    <p class="hint">※ クライアント別に自動保存（localStorage）。サーバー不要・オフライン動作。</p>
-  </aside>
-
-  <main class="main">
-    <h2>④ 生成プロンプト（ChatGPTにそのまま貼る） <span class="scope" id="scopeName"></span></h2>
-
-    <div class="card">
-      <div class="card-head"><h3>📝 コピー生成プロンプト</h3>
-        <button class="btn-ghost copy-btn" data-copy="out_copy">コピー</button></div>
-      <pre id="out_copy">プリセットを選ぶ or 条件を入力して「生成」を押してください。</pre>
-    </div>
-
-    <div class="card">
-      <div class="card-head"><h3>🖼️ 画像生成プロンプト（DALL·E / GPT Image・文字なし背景）</h3>
-        <button class="btn-ghost copy-btn" data-copy="out_img">コピー</button></div>
-      <pre id="out_img">—</pre>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <h3>📊 検証ログ <span class="scope" id="scopeName2"></span></h3>
-        <div class="toolbar">
-          <button class="btn-ghost" id="save_log" style="font-size:11px;padding:6px 10px">＋ 今の生成を記録</button>
-          <button class="btn-ghost" id="export_md" style="font-size:11px;padding:6px 10px">📋 Notion用コピー</button>
-          <button class="btn-ghost" id="export" style="font-size:11px;padding:6px 10px">⬇ CSV出力</button>
+      <!-- CLIENT（追加機能：クライアントごとの情報） -->
+      <div class="tool-form-section">
+        <div class="tool-form-section-header">
+          <div class="tool-section-title-group"><span class="tool-section-number">C</span><h2>クライアント情報</h2></div>
+        </div>
+        <div class="tool-form-section-body">
+          <div class="tool-field"><label class="tool-label">業種・ジャンル</label>
+            <input class="tool-input" id="industry" placeholder="例: 美容医療 / SaaS / EC"></div>
+          <div class="tool-field"><label class="tool-label">トーン＆マナー</label>
+            <input class="tool-input" id="tone" placeholder="例: 清潔感・信頼・上品。落ち着いたトーン"></div>
+          <div class="tool-field"><label class="tool-label">禁止表現（使用禁止ワード）</label>
+            <input class="tool-input" id="ng" placeholder="例: 絶対, No.1, 100%, 必ず痩せる"></div>
+          <p class="hint">ここはクライアント別に保存され、生成プロンプトの「ブランド」項目に反映されます。配色（03）もブランドカラーとして保存されます。</p>
         </div>
       </div>
-      <div id="logwrap"></div>
-      <p class="hint">広告を回したら CTR / CPA / CVR と「考察」を入力 →「Notion用コピー」でNotionに貼る or CSVをNotionにインポート。クライアントごとに別管理されます。</p>
-    </div>
 
-    <div class="card">
-      <div class="card-head"><h3>🧠 プロンプト改善ルール（資産） <span class="scope" id="scopeName3"></span></h3></div>
-      <p class="hint">ChatGPTの出力を見て「次はこうしたい」と思った学びをここに貯めると、<b>次回以降の生成プロンプトに自動で差し込まれます</b>（＝プロンプトが回すほど賢くなる資産に）。</p>
-      <div class="rules-grid">
-        <div>
-          <label style="font-size:12px;color:var(--muted)">📝 コピー改善ルール</label>
-          <div class="rule-add">
-            <input id="ruleCopyIn" placeholder="例: 数字を入れると刺さる（30分で 等）">
-            <button id="ruleCopyAdd" class="btn-ghost">＋ 追加</button>
+      <!-- 00 要件定義 -->
+      <div class="tool-form-section">
+        <div class="tool-form-section-header">
+          <div class="tool-section-title-group"><span class="tool-section-number">00</span><h2>要件定義</h2></div>
+        </div>
+        <div class="tool-form-section-body">
+          <div class="tool-field" data-preset="AUD"><label class="tool-label">誰に（悩み・課題）</label>
+            <div class="tool-preset-wrapper"></div><input class="tool-input" id="audienceProblem"></div>
+          <div class="tool-field" data-preset="VAL"><label class="tool-label">何を（最も伝えたい価値）</label>
+            <div class="tool-preset-wrapper"></div><input class="tool-input" id="coreValue"></div>
+        </div>
+      </div>
+
+      <!-- 01 掲載したい文字 -->
+      <div class="tool-form-section">
+        <div class="tool-form-section-header">
+          <div class="tool-section-title-group"><span class="tool-section-number">01</span><h2>掲載したい文字</h2></div>
+        </div>
+        <div class="tool-form-section-body">
+          <div class="tool-field"><label class="tool-label">メインコピー</label>
+            <input class="tool-input" id="mainCopy" placeholder="例: AIでゼロからデザインする方法"></div>
+          <div class="tool-field"><label class="tool-label">サブコピー</label>
+            <input class="tool-input" id="subCopy" placeholder="例: 誰でも簡単にサムネイルを作れる"></div>
+          <div class="tool-field">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <label class="tool-label" style="margin:0">補足情報</label>
+              <button type="button" class="tool-add-btn" id="addSupp">＋ 要素追加</button>
+            </div>
+            <div id="suppList"></div>
           </div>
-          <ul id="ruleCopyList" class="rule-list"></ul>
-        </div>
-        <div>
-          <label style="font-size:12px;color:var(--muted)">🖼️ 画像改善ルール</label>
-          <div class="rule-add">
-            <input id="ruleImgIn" placeholder="例: 人物は入れない方が反応が良い">
-            <button id="ruleImgAdd" class="btn-ghost">＋ 追加</button>
-          </div>
-          <ul id="ruleImgList" class="rule-list"></ul>
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <div class="card-head"><h3>📚 業種ナレッジ <span class="scope" id="scopeName4"></span></h3></div>
-      <p class="hint">同じ業種のクライアントを横断して「どの訴求が数値が良いか」を自動集計。クライアントを跨いだ"勝ち筋"の資産です（🔁共有で他人のデータも合算）。</p>
-      <div id="knowledgeBox"></div>
+      <!-- 02 画像 -->
+      <div class="tool-form-section">
+        <div class="tool-form-section-header">
+          <div class="tool-section-title-group"><span class="tool-section-number">02</span><h2>画像</h2></div>
+          <button type="button" class="tool-random-btn" id="randImg"><span>RANDOM</span></button>
+        </div>
+        <div class="tool-form-section-body">
+          <div class="tool-field" data-preset="EYE"><label class="tool-label">アイキャッチ</label>
+            <div class="tool-preset-wrapper"></div><input class="tool-input" id="eyecatch"></div>
+          <div class="tool-field" data-preset="BG"><label class="tool-label">背景</label>
+            <div class="tool-preset-wrapper"></div><input class="tool-input" id="background"></div>
+          <div class="tool-field">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <label class="tool-label" style="margin:0">あしらい・アイコン</label>
+              <button type="button" class="tool-add-btn" id="addDeco">＋ 要素追加</button>
+            </div>
+            <div id="decoList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 03 デザイン -->
+      <div class="tool-form-section">
+        <div class="tool-form-section-header">
+          <div class="tool-section-title-group"><span class="tool-section-number">03</span><h2>デザイン</h2></div>
+          <button type="button" class="tool-random-btn" id="randDesign"><span>RANDOM</span></button>
+        </div>
+        <div class="tool-form-section-body">
+          <div class="tool-field" data-preset="LAYOUT"><label class="tool-label">レイアウト</label>
+            <div class="tool-preset-wrapper"></div><input class="tool-input" id="layout"></div>
+          <div class="tool-field" data-preset="STYLE"><label class="tool-label">スタイル</label>
+            <div class="tool-preset-wrapper"></div><input class="tool-input" id="style"></div>
+          <div class="tool-field">
+            <label class="tool-label">要素ごとのサイズ比率（重要度）</label>
+            <div class="tool-ratio-grid" id="ratioGrid"></div>
+          </div>
+          <div class="tool-field" data-preset="FONT"><label class="tool-label">フォント</label>
+            <div class="tool-preset-wrapper"></div><input class="tool-input" id="font"></div>
+          <div class="tool-field" data-preset="SIZE"><label class="tool-label">アウトプットサイズ</label>
+            <div class="tool-preset-wrapper"></div><input class="tool-input" id="size"></div>
+          <div class="tool-field">
+            <label class="tool-label">配色設定</label>
+            <div class="tool-color-grid" id="colorGrid"></div>
+            <div class="tool-color-preview" id="colorPreview"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ＋ プロンプト改善ルール（追加機能：都度改善） -->
+      <div class="tool-form-section">
+        <div class="tool-form-section-header">
+          <div class="tool-section-title-group"><span class="tool-section-number">＋</span><h2>プロンプト改善ルール</h2></div>
+        </div>
+        <div class="tool-form-section-body">
+          <p class="hint">生成結果を見て得た学び（次はこうしたい）を貯めると、<b>以降の生成プロンプトに自動で差し込まれます</b>。回すほど賢くなるクライアント別の資産です。</p>
+          <div class="tool-dynamic-row" style="margin-top:0">
+            <input class="tool-input" id="ruleIn" placeholder="例: 人物より作業画面のモチーフの方が反応が良い">
+            <button type="button" class="tool-add-btn" id="ruleAdd" style="white-space:nowrap">＋ 追加</button>
+          </div>
+          <ul class="rule-list" id="ruleList"></ul>
+        </div>
+      </div>
+
+      <div class="tool-form-footer">
+        <button type="submit" class="tool-submit-btn">プロンプトを生成</button>
+      </div>
+    </form>
+
+    <div class="tool-output-card" id="outCard" style="display:none">
+      <div class="tool-output-header">
+        <h2>生成プロンプト</h2>
+        <button type="button" class="tool-copy-btn" id="copyBtn">コピー</button>
+      </div>
+      <div class="tool-output-body"><pre id="out"></pre></div>
     </div>
-  </main>
-</div>
+  </div>
+</main>
 
 <!-- AI自動セットアップ モーダル -->
 <div id="aiModal" class="modal">
   <div class="modal-box">
-    <div class="modal-head">
-      <h3>🤖 AIでクライアントを自動セットアップ</h3>
-      <button id="closeAI" class="btn-ghost" style="padding:4px 10px">✕</button>
-    </div>
-    <p class="hint">サービス情報を貼る → 生成プロンプトをChatGPTで実行 → 返ってきたJSONを貼って取り込み。<b>手順が固定なので誰がやっても同じ結果＝属人化しません。</b></p>
-
-    <label><span class="step">STEP 1</span>クライアントのサービス情報（事業内容・ターゲット・強み・LP/サイトの抜粋など）</label>
-    <textarea id="svcInfo" style="min-height:92px" placeholder="例: 都内の医療脱毛クリニック。痛みの少ない最新機器、医師が常駐、駅近で予約が取りやすい。20-30代女性向け。初回カウンセリング無料。"></textarea>
-    <button class="btn-ghost" id="genSetup" style="width:100%;margin:10px 0">⚡ セットアップ用プロンプトを生成</button>
-    <pre id="setupPrompt" style="max-height:220px;overflow:auto">↑ 情報を入れて生成。出てきた文をそのままChatGPTに貼ってください。</pre>
-    <button class="btn-ghost copy-btn" data-copy="setupPrompt" style="width:100%;margin-top:8px">📋 プロンプトをコピー</button>
-
+    <div class="modal-head"><h3>🤖 AIでクライアントを自動セットアップ</h3>
+      <button class="tool-add-btn" id="closeAI">✕</button></div>
+    <p class="hint">サービス情報を貼る → プロンプトをChatGPTで実行 → 返ってきたJSONを貼って取り込み。手順が固定なので誰がやっても同じ＝属人化しません。</p>
+    <label><span class="step">STEP 1</span>クライアントのサービス情報</label>
+    <textarea class="tool-input" id="svcInfo" style="min-height:90px" placeholder="例: 都内の医療脱毛クリニック。痛みの少ない最新機器、医師常駐、駅近。20-30代女性向け。初回カウンセリング無料。"></textarea>
+    <button class="tool-add-btn" id="genSetup" style="width:100%;margin:.6rem 0;padding:.6rem">⚡ セットアップ用プロンプトを生成</button>
+    <pre id="setupPrompt" style="max-height:200px;overflow:auto">↑ 情報を入れて生成。出てきた文をChatGPTに貼ってください。</pre>
+    <button class="tool-add-btn copy2" data-copy="setupPrompt" style="width:100%;margin-top:.4rem;padding:.5rem">📋 コピー</button>
     <label><span class="step">STEP 2</span>ChatGPTが返したJSONを貼り付け</label>
-    <textarea id="jsonIn" style="min-height:92px" placeholder='{ "client": "...", "brand": {...}, "presets": [...] }'></textarea>
-    <button class="btn-primary" id="importJson" style="margin-top:10px">✅ このクライアントを作成（ブランド＋プリセット自動生成）</button>
-  </div>
-</div>
-
-<!-- ナレッジ共有 モーダル -->
-<div id="shareModal" class="modal">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h3>🔁 ナレッジ共有（プリセット・ブランド・改善ルール）</h3>
-      <button id="closeShare" class="btn-ghost" style="padding:4px 10px">✕</button>
-    </div>
-    <p class="hint">共有するのは<b>知見だけ</b>（個人の検証ログは含めません）。書き出したJSONをNotionの共有ページに貼り、各自が読み込むと<b>全員の資産がマージ（合算）</b>されます。これで改善ルールの属人化が解けます。</p>
-
-    <label><span class="step">書き出し</span>全クライアントの知見をJSONで出力 → Notion共有ページに貼る</label>
-    <pre id="shareOut" style="max-height:200px;overflow:auto">「書き出す」を押すと、ここにJSONが出ます。</pre>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn-ghost" id="genShare" style="flex:1">⬆ 書き出す</button>
-      <button class="btn-ghost copy-btn" data-copy="shareOut" style="flex:1">📋 コピー</button>
-    </div>
-
-    <label style="margin-top:14px"><span class="step">読み込み</span>共有ページのJSONを貼って取り込み（自分の資産に合算）</label>
-    <textarea id="shareIn" style="min-height:92px" placeholder='{ "type": "banner-tool-knowledge", "clients": {...} }'></textarea>
-    <button class="btn-primary" id="importShare" style="margin-top:10px">⬇ 取り込む（合算する）</button>
-  </div>
-</div>
-
-<!-- 次のクリエイティブ提案 モーダル -->
-<div id="propModal" class="modal">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h3 id="propHead">💡 次のクリエイティブ提案</h3>
-      <button id="closeProp" class="btn-ghost" style="padding:4px 10px">✕</button>
-    </div>
-    <p class="hint" id="propDiag"></p>
-    <label>このプロンプトをChatGPTに貼ると、次に試すバナー3案が出ます</label>
-    <pre id="propPrompt" style="max-height:340px;overflow:auto">—</pre>
-    <button class="btn-ghost copy-btn" data-copy="propPrompt" style="width:100%;margin-top:10px">📋 提案プロンプトをコピー</button>
+    <textarea class="tool-input" id="jsonIn" style="min-height:90px" placeholder='{ "client":"...", "industry":"...", "brand":{...}, ... }'></textarea>
+    <button class="tool-submit-btn" id="importJson" style="margin-top:.6rem">✅ このクライアントを作成</button>
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-const BRAND_FIELDS = { b_tone:"tone", b_keywords:"keywords", b_colors:"colors", b_ng:"ng" };
-const DRAFT_FIELDS = ["target","axis","value","visual","ratio","count","offer"];
 
-// ---------- 初期データ（クライアント例: デザイン系 と 美容クリニック） ----------
-function seed(){
+/* ---------- 選択肢（ad-prompt-generator と同一） ---------- */
+const OPT = {
+  AUD: ["AIに興味はあるが、何から始めればいいかわからない初心者","日々の制作や資料作成に時間を取られているビジネスパーソン","画像生成AIを使っても狙ったデザインに近づけられないデザイナー","競合にAI活用で遅れを取りたくない経営者","表現の幅を広げたいが、制作コストや時間に限界を感じているクリエイター","新しいスキルを身につけてキャリアの選択肢を増やしたい人"],
+  VAL: ["専門知識がなくても、AIで広告クリエイティブを作れる","短時間で伝わるバナーやサムネイルの方向性を固められる","曖昧なイメージを、AIに伝わる具体的な指示へ変換できる","チーム全体の制作スピードと品質を同時に上げられる","自分らしい表現を、より少ない手戻りで形にできる","AIデザインを実務や副業に活かせるスキルとして習得できる"],
+  EYE: ["お任せ","PCを手に持つ男性（日本人、20代）のクローズアップ","PCを手に持つ女性（日本人、20代）のクローズアップ","PCで仕事をする男性（日本人、20代）のクローズアップ","PCで仕事をする女性（日本人、20代）のクローズアップ"],
+  BG: ["お任せ","幾何学模様・抽象パターン","白・無地（クリーン）","グラデーション（パステル系）","都会の街並み（ぼかし）","自然・植物のグリーン","木目・ナチュラル素材","ダーク・ブラック"],
+  DECO: ["企業ロゴ","サービスロゴ","矢印・ポインター","吹き出し","星・スパークル","チェックマーク","数字バッジ"],
+  LAYOUT: ["お任せ","左に文章、右に写真を並べる","左に写真、右に文章を並べる","上に写真、下に文章を配置する","上に文章、下に写真を配置する","画面を左右半分ずつに分けて、それぞれに内容を置く","画面いっぱいの写真に半透明の暗幕を敷き、文章を重ねる","写真の上に文章を重ねて中央に置く","背景色やグラデーションの上に文章だけ置く","角丸の枠で囲み、まわりに余白を持たせたカード風"],
+  STYLE: ["お任せ","ミニマル・シンプル","モダン・洗練","ポップ・カラフル","エレガント・高級感","テック・フューチャリスティック"],
+  FONT: ["お任せ","ゴシック体（モダン・力強い）","明朝体（上品・知的）","丸ゴシック（親しみやすい）","手書き風（カジュアル・温かみ）"],
+  SIZE: ["1920×1080（X / YouTube）","1080×1080（Instagram 正方形）","1080×1350（Instagram 縦長）","1289×670（note）"]
+};
+const RATIO = ["小","中","大","特大"];
+const PALETTE = ["#000000","#111111","#333333","#525252","#737373","#A3A3A3","#E5E5E5","#FFFFFF"];
+const SIMPLE_FIELDS = ["industry","tone","ng","audienceProblem","coreValue","mainCopy","subCopy","eyecatch","background","layout","style","font","size"];
+
+function defaultClient(){
   return {
-    active: "AI Design Lab（自分の検証）",
-    clients: {
-      "AI Design Lab（自分の検証）": {
-        brand: { tone:"信頼感がありつつ親しみやすい。誇張せず等身大で実用的",
-          keywords:"クリーン, モダン, 余白, 知的, やわらかい光",
-          colors:"#6C8CFF, #28D0A8, #0F1115, #FFFFFF",
-          ng:"絶対, No.1, 誰でも稼げる, 100%, 過度な煽り" },
-        draft: { target:"ノンデザイナーのマーケター", axis:"時短・効率",
-          value:"作業時間を圧倒的に短縮できる", visual:"軽やかに作業が進む、すっきりした環境、やわらかい光",
-          ratio:"1:1 (1080x1080) 正方形", count:"5", offer:"ChatGPTバナー量産マニュアル(無料PDF)" },
-        presets: [
-          {name:"時短×マーケター", target:"ノンデザイナーのマーケター", axis:"時短・効率", value:"作業時間を圧倒的に短縮できる", visual:"軽やかに作業が進む、すっきりした環境、やわらかい光"},
-          {name:"クオリティ×新米デザイナー", target:"これからAIを学びたい新米デザイナー", axis:"クオリティ", value:"非デザイナーでもプロ品質に仕上がる", visual:"洗練された制作物が並ぶ、上質な質感"},
-          {name:"学び・共感×新米デザイナー", target:"これからAIを学びたい新米デザイナー", axis:"学び・共感", value:"AIと共存しながら成長できる", visual:"人とAIのやわらかい協働、あたたかい光"},
-          {name:"仕組み化×採用担当", target:"採用担当・デザインマネージャー", axis:"仕組み化", value:"属人化せず同じ品質を再現できる", visual:"パーツが整然と並ぶ図解的ビジュアル"}
-        ],
-        rules: {
-          copy: ["数字や具体時間を入れると刺さる（例: 30分で）", "「誰でも」より「ノンデザイナーでも」の方が自分ごと化されてCTR高い"],
-          image: ["人物は入れず、作業画面/ツールのモチーフの方が反応が良い", "余白は広めに取る"]
-        },
-        industry:"AI/デザイン", targets:{ctr:"",cpa:"",cvr:""},
-        logs: []
-      },
-      "美容クリニックA（例）": {
-        brand: { tone:"清潔感・信頼・上品。安心して任せられる落ち着いたトーン",
-          keywords:"清潔感, 透明感, やわらかい光, 上品, ナチュラル",
-          colors:"#FFFFFF, #F7E4E1, #C9A86A, #3A3A3A",
-          ng:"絶対安全, 100%, 必ず痩せる, 誇大な効果保証" },
-        draft: { target:"医療脱毛を検討中の20-30代女性", axis:"安心・信頼",
-          value:"医師監修・症例実績で安心して任せられる", visual:"清潔感のある明るいクリニック空間、白と淡いピンク、やわらかな自然光",
-          ratio:"4:5 (1080x1350) 縦長フィード", count:"5", offer:"初回カウンセリング無料予約" },
-        presets: [
-          {name:"安心・信頼×検討層", target:"医療脱毛を検討中の20-30代女性", axis:"安心・信頼", value:"医師監修・症例実績で安心して任せられる", visual:"清潔感のある明るいクリニック空間、白と淡いピンク、やわらかな自然光"},
-          {name:"効果実感×肌悩み", target:"肌悩みを抱える30代女性", axis:"効果実感", value:"効果をしっかり実感できる", visual:"透明感のある肌のイメージ、上品で清潔、余白多め"},
-          {name:"価格・初回×美容医療デビュー", target:"美容医療が初めての人", axis:"価格・キャンペーン", value:"初回限定価格で気軽に始められる", visual:"明るく親しみやすい清潔感、淡いピンクとゴールドの差し色"},
-          {name:"通いやすさ×多忙層", target:"仕事で忙しい20-40代女性", axis:"通いやすさ", value:"駅近・予約が取りやすく続けやすい", visual:"洗練された都会的な空間、すっきりした導線"}
-        ],
-        rules: {
-          copy: ["「医師監修」を頭に置くと安心感でCTRが上がる"],
-          image: ["清潔感と肌の透明感を最優先、淡いピンク背景が好反応", "過度な加工感は避ける"]
-        },
-        industry:"美容医療", targets:{ctr:"",cpa:"",cvr:""},
-        logs: []
-      }
-    }
+    industry:"AI/デザイン", tone:"信頼感がありつつ親しみやすい。誇張せず等身大で実用的", ng:"絶対, No.1, 誰でも稼げる, 100%, 過度な煽り",
+    audienceProblem:"AIに興味はあるが、何から始めればいいかわからない初心者",
+    coreValue:"専門知識がなくても、AIで広告クリエイティブを作れる",
+    mainCopy:"AIでゼロからデザインする方法", subCopy:"誰でも簡単にサムネイルを作れるデザイナーに",
+    supplements:["2月20日（金）21:30~22:30 開催","参加無料"],
+    eyecatch:"PCを手に持つ男性（日本人、20代）のクローズアップ", background:"幾何学模様・抽象パターン",
+    imageElements:["企業ロゴ"],
+    layout:"左に文章、右に写真を並べる", style:"モダン・洗練", font:"ゴシック体（モダン・力強い）",
+    mainRatio:"大", subRatio:"中", suppRatio:"小", eyeRatio:"中",
+    baseColor:"#FFFFFF", mainColor:"#111111", accentColor:"#737373", size:"1920×1080（X / YouTube）",
+    rules:[]
   };
 }
 
-// ---------- 永続化 ----------
+/* ---------- 永続化（クライアント別） ---------- */
 let state;
-function load(){ try{ state = JSON.parse(localStorage.getItem("bt_v2")); }catch(e){} if(!state || !state.clients) state = seed();
-  // 後方互換: rules欄が無いクライアントに空ルールを補完
-  Object.values(state.clients).forEach(c=>{ if(!c.rules) c.rules={copy:[],image:[]}; if(!c.rules.copy) c.rules.copy=[]; if(!c.rules.image) c.rules.image=[];
-    if(c.industry==null) c.industry=""; if(!c.targets) c.targets={ctr:"",cpa:"",cvr:""}; }); }
-function save(){ localStorage.setItem("bt_v2", JSON.stringify(state)); }
-const client = () => state.clients[state.active];
+function load(){
+  try{ state = JSON.parse(localStorage.getItem("apg_v1")); }catch(e){}
+  if(!state || !state.clients){
+    state = { active:"自分（AI Design Lab）", clients:{ "自分（AI Design Lab）": defaultClient(),
+      "美容クリニックA（例）": Object.assign(defaultClient(), {
+        industry:"美容医療", tone:"清潔感・信頼・上品。安心して任せられる落ち着いたトーン", ng:"絶対安全, 100%, 必ず痩せる, 誇大な効果保証",
+        audienceProblem:"競合にAI活用で遅れを取りたくない経営者", coreValue:"短時間で伝わるバナーやサムネイルの方向性を固められる",
+        mainCopy:"医師監修で安心の医療脱毛", subCopy:"初回カウンセリングは無料",
+        supplements:["初回限定キャンペーン中"], eyecatch:"PCを手に持つ女性（日本人、20代）のクローズアップ",
+        background:"白・無地（クリーン）", imageElements:["チェックマーク"],
+        layout:"左に写真、右に文章を並べる", style:"エレガント・高級感", font:"明朝体（上品・知的）",
+        baseColor:"#FFFFFF", mainColor:"#3A3A3A", accentColor:"#C9A86A", size:"1080×1350（Instagram 縦長）", rules:[]
+      }) } };
+  }
+  // 後方互換
+  Object.values(state.clients).forEach(c=>{ const d=defaultClient(); for(const k in d) if(c[k]===undefined) c[k]=Array.isArray(d[k])?d[k].slice():d[k]; if(!c.rules) c.rules=[]; });
+}
+function save(){ localStorage.setItem("apg_v1", JSON.stringify(state)); }
+const cur = () => state.clients[state.active];
 
-// ---------- クライアント切替UI ----------
-function renderClientSelect(){
-  const s = $("clientSelect"); s.innerHTML = "";
-  Object.keys(state.clients).forEach(name=>{
-    const o = document.createElement("option"); o.textContent = name;
-    if(name===state.active) o.selected = true; s.appendChild(o);
+/* ---------- プリセット<select>の生成 ---------- */
+function buildPresets(){
+  document.querySelectorAll(".tool-field[data-preset]").forEach(field=>{
+    const key = field.dataset.preset;
+    const wrap = field.querySelector(".tool-preset-wrapper");
+    const input = field.querySelector("input");
+    const sel = document.createElement("select");
+    sel.className = "tool-preset-select";
+    sel.innerHTML = '<option value="">プリセットから選ぶ ▾</option>' + OPT[key].map(o=>`<option value="${o.replace(/"/g,'&quot;')}">${o}</option>`).join("");
+    sel.addEventListener("change", ()=>{ if(sel.value){ input.value=sel.value; cur()[input.id]=sel.value; save(); sel.value=""; } });
+    wrap.appendChild(sel);
   });
-  $("scopeName").textContent = "— " + state.active;
-  $("scopeName2").textContent = "— " + state.active;
-  $("scopeName3").textContent = "— " + state.active;
 }
 
-// ---------- プロンプト改善ルール（クライアント別の資産） ----------
-function renderRuleList(kind){
-  const ul = $(kind==="copy" ? "ruleCopyList" : "ruleImgList");
-  const arr = client().rules[kind];
-  if(!arr.length){ ul.innerHTML = '<li class="empty-r">まだルールなし。結果を見て気づいたら足していく。</li>'; return; }
-  ul.innerHTML = "";
+/* ---------- 比率グリッド ---------- */
+function buildRatio(){
+  const items = [["メインコピー","mainRatio"],["サブコピー","subRatio"],["補足情報","suppRatio"],["アイキャッチ","eyeRatio"]];
+  $("ratioGrid").innerHTML = items.map(([lab,k])=>`<div class="tool-ratio-item"><span class="tool-ratio-label">${lab}</span>
+    <div class="tool-ratio-select-group" data-k="${k}">${RATIO.map(r=>`<button type="button" class="tool-ratio-btn" data-v="${r}">${r}</button>`).join("")}</div></div>`).join("");
+  $("ratioGrid").querySelectorAll(".tool-ratio-btn").forEach(b=> b.addEventListener("click", ()=>{
+    const k=b.parentElement.dataset.k; cur()[k]=b.dataset.v; save(); renderRatio();
+  }));
+}
+function renderRatio(){
+  $("ratioGrid").querySelectorAll(".tool-ratio-select-group").forEach(g=>{
+    const v=cur()[g.dataset.k];
+    g.querySelectorAll(".tool-ratio-btn").forEach(b=> b.classList.toggle("active", b.dataset.v===v));
+  });
+}
+
+/* ---------- 配色 ---------- */
+function buildColors(){
+  const cols=[["ベース","baseColor","70%"],["メイン","mainColor","25%"],["アクセント","accentColor","5%"]];
+  $("colorGrid").innerHTML = cols.map(([lab,k,r])=>`<div class="tool-color-picker">
+    <div class="tool-color-picker-header"><span class="tool-color-label">${lab}</span><span class="tool-color-ratio">${r}</span></div>
+    <div class="tool-color-input-row">
+      <input type="color" class="tool-color-swatch" data-k="${k}">
+      <input type="text" class="tool-input tool-color-hex" data-k="${k}">
+    </div></div>`).join("");
+  $("colorGrid").querySelectorAll("input").forEach(inp=> inp.addEventListener("input", ()=>{
+    const k=inp.dataset.k; cur()[k]=inp.value; save(); renderColors();
+  }));
+}
+function renderColors(){
+  $("colorGrid").querySelectorAll("input").forEach(inp=>{ inp.value = cur()[inp.dataset.k]; });
+  $("colorPreview").innerHTML =
+    `<div style="background:${cur().baseColor};flex:7"></div><div style="background:${cur().mainColor};flex:2.5"></div><div style="background:${cur().accentColor};flex:.5"></div>`;
+}
+
+/* ---------- 動的リスト（補足・装飾） ---------- */
+function renderSupp(){
+  const list=$("suppList"); list.innerHTML="";
+  cur().supplements.forEach((v,i)=>{
+    const row=document.createElement("div"); row.className="tool-dynamic-row";
+    const inp=document.createElement("input"); inp.className="tool-input"; inp.value=v; inp.placeholder="例: 参加無料";
+    inp.addEventListener("input", ()=>{ cur().supplements[i]=inp.value; save(); });
+    const del=document.createElement("button"); del.type="button"; del.className="tool-remove-btn"; del.textContent="✕";
+    del.addEventListener("click", ()=>{ cur().supplements.splice(i,1); save(); renderSupp(); });
+    row.append(inp,del); list.appendChild(row);
+  });
+}
+function renderDeco(){
+  const list=$("decoList"); list.innerHTML="";
+  cur().imageElements.forEach((v,i)=>{
+    const row=document.createElement("div"); row.className="tool-dynamic-row";
+    const sel=document.createElement("select"); sel.className="tool-input";
+    sel.innerHTML = OPT.DECO.map(o=>`<option ${o===v?"selected":""}>${o}</option>`).join("");
+    sel.addEventListener("change", ()=>{ cur().imageElements[i]=sel.value; save(); });
+    const del=document.createElement("button"); del.type="button"; del.className="tool-remove-btn"; del.textContent="✕";
+    del.addEventListener("click", ()=>{ cur().imageElements.splice(i,1); save(); renderDeco(); });
+    row.append(sel,del); list.appendChild(row);
+  });
+}
+
+/* ---------- 改善ルール ---------- */
+function renderRules(){
+  const ul=$("ruleList"); const arr=cur().rules;
+  if(!arr.length){ ul.innerHTML='<li class="empty-r">まだルールなし。生成結果を見て気づいたら足していく。</li>'; return; }
+  ul.innerHTML="";
   arr.forEach((r,i)=>{
-    const li = document.createElement("li");
-    const span = document.createElement("span"); span.textContent = r;
-    const del = document.createElement("button"); del.className="del"; del.textContent="✕";
-    del.addEventListener("click", ()=>{ client().rules[kind].splice(i,1); save(); renderRuleList(kind); generate(); });
-    li.append(span, del); ul.appendChild(li);
+    const li=document.createElement("li");
+    const span=document.createElement("span"); span.textContent=r;
+    const del=document.createElement("button"); del.className="tool-add-btn"; del.textContent="✕";
+    del.addEventListener("click", ()=>{ cur().rules.splice(i,1); save(); renderRules(); });
+    li.append(span,del); ul.appendChild(li);
   });
 }
-function renderRules(){ renderRuleList("copy"); renderRuleList("image"); }
 
-// 蓄積（プリセット＋検証ログ）から 訴求軸・ターゲットの候補を作る（表記ゆれ防止＝標準化）
-function fillDatalist(id, values){
-  const dl = $(id); dl.innerHTML = "";
-  [...new Set(values.filter(v=>v && v.trim()))].forEach(v=>{
-    const o = document.createElement("option"); o.value = v; dl.appendChild(o);
+/* ---------- クライアント読み込み/保存 ---------- */
+function renderClientSelect(){
+  const s=$("clientSelect"); s.innerHTML="";
+  Object.keys(state.clients).forEach(n=>{ const o=document.createElement("option"); o.textContent=n; if(n===state.active)o.selected=true; s.appendChild(o); });
+}
+function loadClient(){
+  const c=cur();
+  SIMPLE_FIELDS.forEach(f=> $(f).value = c[f]||"");
+  renderSupp(); renderDeco(); renderRatio(); renderColors(); renderRules();
+}
+function wireSimple(){
+  SIMPLE_FIELDS.forEach(f=> $(f).addEventListener("input", ()=>{ cur()[f]=$(f).value; save(); }));
+}
+
+/* ---------- プロンプト生成（テンプレートは ad-prompt-generator と同一＋ブランド／学び） ---------- */
+function buildPrompt(){
+  const t=cur();
+  const supp = t.supplements.filter(x=>x.trim()).map(x=>`- ${x}`).join("\n");
+  const deco = t.imageElements.filter(x=>x.trim()).map(x=>`- ${x}`).join("\n");
+  const ratio = `メインコピー: ${t.mainRatio}, サブコピー: ${t.subRatio}, 補足情報: ${t.suppRatio}, アイキャッチ: ${t.eyeRatio}`;
+
+  // 追加：ブランド（このクライアント専用）
+  const brandLines=[`- クライアント: ${state.active}`];
+  if(t.industry) brandLines.push(`- 業種: ${t.industry}`);
+  if(t.tone) brandLines.push(`- トーン＆マナー: ${t.tone}`);
+  if(t.ng) brandLines.push(`- 禁止表現（使用禁止）: ${t.ng}`);
+  const brandBlock = `\n\n## ブランド（このクライアント専用・必ず遵守）\n${brandLines.join("\n")}`;
+
+  // 追加：これまでの学び
+  const learn = t.rules.filter(x=>x.trim());
+  const learnBlock = learn.length ? `\n\n## これまでの学び（過去の結果から必ず反映）\n${learn.map(x=>`- ${x}`).join("\n")}` : "";
+
+  return `以下の要件を読んだ後、広告画像を生成してください。${brandBlock}
+
+## 要件定義
+- 誰に（悩み・課題）: ${t.audienceProblem}
+- 何を（最も伝えたい価値）: ${t.coreValue}
+
+## 掲載テキスト
+- メインコピー: 「${t.mainCopy}」
+- サブコピー: 「${t.subCopy}」
+${supp?`### 補足情報\n${supp}\n`:""}
+## ビジュアル
+- アイキャッチ: ${t.eyecatch}
+- 背景: ${t.background}
+${deco?`### 装飾要素\n${deco}\n`:""}
+## デザイン仕様
+- レイアウト: ${t.layout}
+- スタイル: ${t.style}
+- フォント: ${t.font}
+- 各要素のサイズ比率: ${ratio}
+- 配色: ベース ${t.baseColor}（70%）/ メイン ${t.mainColor}（25%）/ アクセント ${t.accentColor}（5%）
+- サイズ: ${t.size}${learnBlock}
+
+## Technical Metadata
+高解像度, 商用品質, シャープフォーカス, プロフェッショナルレタッチ, 印刷対応品質`;
+}
+
+/* ---------- イベント ---------- */
+$("adForm").addEventListener("submit", e=>{
+  e.preventDefault();
+  $("out").textContent = buildPrompt();
+  $("outCard").style.display="block";
+  $("outCard").scrollIntoView({behavior:"smooth",block:"start"});
+});
+$("copyBtn").addEventListener("click", ()=>{
+  navigator.clipboard.writeText($("out").textContent).then(()=>{
+    const b=$("copyBtn"); b.textContent="✓ コピー済"; b.classList.add("copied");
+    setTimeout(()=>{ b.textContent="コピー"; b.classList.remove("copied"); },1500);
   });
-}
-function renderSuggestions(){
-  const c = client();
-  const axes = [...c.presets.map(p=>p.axis), ...c.logs.map(l=>l.axis)];
-  const targets = [...c.presets.map(p=>p.target), ...c.logs.map(l=>l.target)];
-  fillDatalist("axisOptions", axes);
-  fillDatalist("targetOptions", targets);
-}
-function addRule(kind, inputId){
-  const v = $(inputId).value.trim(); if(!v) return;
-  client().rules[kind].push(v); $(inputId).value=""; save(); renderRuleList(kind); generate();
-}
-$("ruleCopyAdd").addEventListener("click", ()=> addRule("copy","ruleCopyIn"));
-$("ruleImgAdd").addEventListener("click", ()=> addRule("image","ruleImgIn"));
-$("ruleCopyIn").addEventListener("keydown", e=>{ if(e.key==="Enter") addRule("copy","ruleCopyIn"); });
-$("ruleImgIn").addEventListener("keydown", e=>{ if(e.key==="Enter") addRule("image","ruleImgIn"); });
-function renderPresetSelect(){
-  const s = $("presetSelect"); s.innerHTML = '<option value="">— 型を選ぶ —</option>';
-  client().presets.forEach((p,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=p.name; s.appendChild(o); });
-}
-function loadClientIntoForm(){
-  const c = client();
-  for(const [id,key] of Object.entries(BRAND_FIELDS)) $(id).value = c.brand[key] || "";
-  DRAFT_FIELDS.forEach(f=>{ if($(f)) $(f).value = c.draft[f] || ""; });
-  $("c_industry").value = c.industry || "";
-  $("t_ctr").value = c.targets.ctr || ""; $("t_cpa").value = c.targets.cpa || ""; $("t_cvr").value = c.targets.cvr || "";
-  renderPresetSelect(); renderLogs(); renderRules(); renderSuggestions(); renderIndustryOptions(); renderKnowledge(); generate();
-}
-
-// 入力 → アクティブクライアントへ保存
-function wireInputs(){
-  for(const id of Object.keys(BRAND_FIELDS)) $(id).addEventListener("input", ()=>{ client().brand[BRAND_FIELDS[id]] = $(id).value; save(); });
-  DRAFT_FIELDS.forEach(f=> $(f).addEventListener("input", ()=>{ client().draft[f] = $(f).value; save(); }));
-  $("c_industry").addEventListener("input", ()=>{ client().industry = $("c_industry").value; save(); renderIndustryOptions(); renderKnowledge(); });
-  ["ctr","cpa","cvr"].forEach(k=> $("t_"+k).addEventListener("change", ()=>{ client().targets[k] = $("t_"+k).value; save(); renderLogs(); }));
-}
-
-// ---------- プリセット ----------
-$("presetSelect").addEventListener("change", e=>{
-  const i = e.target.value; if(i==="") return;
-  const p = client().presets[i];
-  ["target","axis","value","visual"].forEach(k=>{ $(k).value = p[k]||""; client().draft[k] = p[k]||""; });
-  save(); generate();
 });
-$("savePreset").addEventListener("click", ()=>{
-  const target=$("target").value.trim(), axis=$("axis").value.trim();
-  if(!target||!axis){ alert("ターゲットと訴求軸を入力してください"); return; }
-  const name = prompt("この型の名前は？", `${axis}×${target.slice(0,8)}`);
-  if(!name) return;
-  client().presets.push({ name, target, axis, value:$("value").value, visual:$("visual").value });
-  save(); renderPresetSelect(); renderSuggestions();
+$("addSupp").addEventListener("click", ()=>{ cur().supplements.push(""); save(); renderSupp(); });
+$("addDeco").addEventListener("click", ()=>{ cur().imageElements.push(OPT.DECO[0]); save(); renderDeco(); });
+$("ruleAdd").addEventListener("click", ()=>{ const v=$("ruleIn").value.trim(); if(!v)return; cur().rules.push(v); $("ruleIn").value=""; save(); renderRules(); });
+$("ruleIn").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); $("ruleAdd").click(); } });
+
+const rand = a => a[Math.floor(Math.random()*a.length)];
+$("randImg").addEventListener("click", ()=>{
+  const c=cur(); c.eyecatch=rand(OPT.EYE); c.background=rand(OPT.BG); c.imageElements=[rand(OPT.DECO)];
+  save(); loadClient();
+});
+$("randDesign").addEventListener("click", ()=>{
+  const c=cur(); c.layout=rand(OPT.LAYOUT); c.style=rand(OPT.STYLE); c.font=rand(OPT.FONT);
+  c.mainRatio=rand(RATIO); c.subRatio=rand(RATIO); c.suppRatio=rand(RATIO); c.eyeRatio=rand(RATIO);
+  c.baseColor=rand(PALETTE); c.mainColor=rand(PALETTE); c.accentColor=rand(PALETTE);
+  save(); loadClient();
 });
 
-// ---------- クライアント追加/改名/削除 ----------
-$("clientSelect").addEventListener("change", e=>{ state.active = e.target.value; save(); renderClientSelect(); loadClientIntoForm(); });
+/* ---------- クライアント操作 ---------- */
+$("clientSelect").addEventListener("change", e=>{ state.active=e.target.value; save(); loadClient(); });
 $("addClient").addEventListener("click", ()=>{
-  const name = prompt("新しいクライアント / 案件名は？（例: 美容クリニックB、カフェ◯◯）");
-  if(!name || state.clients[name]) { if(state.clients[name]) alert("同名が既にあります"); return; }
-  state.clients[name] = {
-    brand:{tone:"",keywords:"",colors:"",ng:""},
-    draft:{target:"",axis:"",value:"",visual:"",ratio:"1:1 (1080x1080) 正方形",count:"5",offer:""},
-    presets:[], rules:{copy:[],image:[]}, industry:"", targets:{ctr:"",cpa:"",cvr:""}, logs:[]
-  };
-  state.active = name; save(); renderClientSelect(); loadClientIntoForm();
+  const n=prompt("新しいクライアント / 案件名は？"); if(!n) return;
+  if(state.clients[n]){ alert("同名が既にあります"); return; }
+  state.clients[n]=defaultClient(); state.active=n; save(); renderClientSelect(); loadClient();
 });
 $("renameClient").addEventListener("click", ()=>{
-  const name = prompt("新しい名前は？", state.active); if(!name || name===state.active) return;
-  if(state.clients[name]){ alert("同名が既にあります"); return; }
-  state.clients[name] = state.clients[state.active]; delete state.clients[state.active];
-  state.active = name; save(); renderClientSelect(); loadClientIntoForm();
+  const n=prompt("新しい名前は？", state.active); if(!n||n===state.active) return;
+  if(state.clients[n]){ alert("同名が既にあります"); return; }
+  state.clients[n]=state.clients[state.active]; delete state.clients[state.active]; state.active=n; save(); renderClientSelect();
 });
 $("delClient").addEventListener("click", ()=>{
   if(Object.keys(state.clients).length<=1){ alert("最後の1社は削除できません"); return; }
-  if(!confirm(`「${state.active}」を削除します。検証ログも消えます。よろしいですか？`)) return;
-  delete state.clients[state.active];
-  state.active = Object.keys(state.clients)[0]; save(); renderClientSelect(); loadClientIntoForm();
+  if(!confirm(`「${state.active}」を削除します。よろしいですか？`)) return;
+  delete state.clients[state.active]; state.active=Object.keys(state.clients)[0]; save(); renderClientSelect(); loadClient();
 });
 
-// ---------- プロンプト生成 ----------
-let current = null;
-function generate(){
-  const c = client(), b = c.brand;
-  const target=$("target").value||"（ターゲット未入力）", axis=$("axis").value||"（訴求軸未入力）";
-  const value=$("value").value||axis, visual=$("visual").value;
-  const n=$("count").value, ratio=$("ratio").value, offer=$("offer").value||"資料ダウンロード";
-
-  // 蓄積したプロンプト改善ルールを差し込む（＝プロンプトの資産化）
-  const cRules=c.rules.copy, iRules=c.rules.image;
-  const cBlock = cRules.length ? `\n\n# これまでの学び（過去の結果から蓄積・必ず反映）\n${cRules.map(r=>"- "+r).join("\n")}` : "";
-  const iBlock = iRules.length ? `\nLearnings from past results (apply): ${iRules.join(" / ")}` : "";
-
-  const copyPrompt =
-`あなたはプロのコピーライターです。以下のブランドと条件に厳密に沿って、広告バナー用のキャッチコピーを${n}案つくってください。
-
-# ブランド設計（必ず守る）
-- クライアント：${state.active}
-- トーン＆マナー：${b.tone||"（未設定）"}
-- 世界観キーワード：${b.keywords||"（未設定）"}
-- 禁止表現（絶対に使わない）：${b.ng||"（未設定）"}
-
-# 今回のバナー条件
-- ターゲット：${target}
-- 訴求軸：${axis}（伝えたい価値＝${value}）
-- クリック後の着地点：「${offer}」のLP${cBlock}
-
-# 出力ルール
-- 1案＝【メインコピー（全角13文字以内）】＋【サブコピー（全角20文字以内）】
-- ターゲットの“悩み・本音”に刺さる言葉から始める
-- 禁止表現・誇大表現は使わない
-- ${n}案を番号付きで出し、各案に「この案の狙い」を1行添える
-- 最後に、最もCTRが高そうな案とその理由を1つ挙げる`;
-
-  const area = ratio.startsWith("9:16") ? "lower third" : "right side";
-  const subject = visual || `concept representing "${axis}" (${value}) for ${target}`;
-  const imgPrompt =
-`Create a ${ratio} advertising banner BACKGROUND image. Absolutely NO text, NO letters, NO logo.
-
-Subject / concept: ${subject}
-Target audience context: ${target}
-Style: clean, modern, professional, soft realistic lighting, high quality
-Color palette (strict): ${b.colors||"brand colors"}
-Mood: ${b.tone||"on-brand"}
-Composition: keep generous negative space on the ${area} so Japanese copy can be overlaid later${iBlock}
-Avoid: any text, watermark, signature, clutter, busy background`;
-
-  $("out_copy").textContent = copyPrompt;
-  $("out_img").textContent = imgPrompt;
-  current = { date:new Date().toISOString().slice(0,10), client:state.active, target, axis, ratio:ratio.split(" ")[0], offer, copyPrompt, imgPrompt };
-}
-$("gen").addEventListener("click", generate);
-
-// ---------- コピー ----------
-document.querySelectorAll(".copy-btn[data-copy]").forEach(b=>{
-  b.addEventListener("click", ()=>{
-    navigator.clipboard.writeText($(b.dataset.copy).textContent).then(()=>{
-      const o=b.textContent; b.textContent="✓ コピー済"; b.classList.add("copied");
-      setTimeout(()=>{ b.textContent=o; b.classList.remove("copied"); },1200);
-    });
-  });
-});
-
-// ---------- 自動判定（④）：数値→◎◯△＋診断 ----------
-function num(v){ const n=parseFloat(v); return isNaN(n)?null:n; }
-function computeRefs(c){
-  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
-  const ctrs=c.logs.map(l=>num(l.ctr)).filter(v=>v!=null);
-  const cvrs=c.logs.map(l=>num(l.cvr)).filter(v=>v!=null);
-  const cpas=c.logs.map(l=>num(l.cpa)).filter(v=>v!=null);
-  const t=c.targets||{};
-  return { ctr: num(t.ctr) ?? avg(ctrs), cvr: num(t.cvr) ?? avg(cvrs), cpa: num(t.cpa) ?? avg(cpas) };
-}
-function judge(l, ref){
-  const ctr=num(l.ctr);
-  if(ctr==null || ref.ctr==null) return {grade:"—",label:"未測定",cls:"j-na",diag:"CTRを入力すると自動診断します",branch:"na"};
-  if(ctr >= ref.ctr*1.15) return {grade:"◎",label:"良い",cls:"j-good",diag:"CTRが基準より高い勝ちパターン。横展開でスケール",branch:"win"};
-  if(ctr >= ref.ctr*0.85){
-    const cvr=num(l.cvr);
-    if(cvr!=null && ref.cvr!=null && cvr < ref.cvr*0.85)
-      return {grade:"◯",label:"普通",cls:"j-mid",diag:"CTRは並だがCVRが低い→LP/整合性が要因",branch:"lp"};
-    return {grade:"◯",label:"普通",cls:"j-mid",diag:"平均的。フック/訴求の磨き込み余地あり",branch:"mid"};
-  }
-  return {grade:"△",label:"要改善",cls:"j-bad",diag:"CTRが基準より低い→クリエイティブ（バナー/コピー）が弱い",branch:"ctr"};
-}
-
-// ---------- 次のクリエイティブ提案（⑤） ----------
-function buildProposal(l){
-  const c=client(), b=c.brand, ref=computeRefs(c), j=judge(l,ref);
-  let head, ask;
-  if(j.branch==="win"){ head="🏆 勝ちパターンの横展開"; ask="この勝ちパターン（ターゲットと世界観）は維持しつつ、訴求軸だけを変えた“別訴求の派生バナー”を提案してください。"; }
-  else if(j.branch==="lp"){ head="🔧 LP/整合性の改善"; ask="バナーとLPのメッセージを一致させCVRを上げる方向で、新しいバナーコピー案と、LPファーストビューの見出し改善案をセットで提案してください。"; }
-  else if(j.branch==="ctr"){ head="✏️ フック刷新"; ask="フック（最初の一言）と訴求軸を変えて、CTRを引き上げる新しいバナーコピーを提案してください。"; }
-  else { head="🔁 磨き込み"; ask="訴求の切り口を変えた改善バナーを提案してください。"; }
-  const prompt=
-`あなたは広告クリエイティブのプランナーです。以下の結果を踏まえ、次に試すバナーを提案してください。
-
-# ブランド
-- クライアント：${state.active}（業種：${c.industry||"未設定"}）
-- トーン＆マナー：${b.tone||"（未設定）"}
-- 世界観キーワード：${b.keywords||"（未設定）"}
-- 禁止表現：${b.ng||"（未設定）"}
-
-# 元バナーの結果
-- ターゲット：${l.target}
-- 訴求軸：${l.axis}
-- 数値：CTR ${l.ctr||"-"}% / CVR ${l.cvr||"-"}% / CPA ${l.cpa||"-"}円
-- 自動診断：${j.diag}
-
-# 依頼
-${ask}
-
-# 出力
-- 次に試すバナー案を3つ（各：メインコピー13文字以内＋サブ20文字以内＋狙い）
-- それぞれ「元から変えた1要素」を明記（A/Bで検証できるように）`;
-  return {head, j, prompt};
-}
-function openProposal(l){
-  const {head, j, prompt}=buildProposal(l);
-  $("propHead").textContent=head;
-  $("propDiag").textContent=`判定：${j.grade} ${j.label} ／ ${j.diag}`;
-  $("propPrompt").textContent=prompt;
-  $("propModal").style.display="flex";
-}
-$("closeProp").addEventListener("click", ()=>$("propModal").style.display="none");
-$("propModal").addEventListener("click", e=>{ if(e.target===$("propModal")) $("propModal").style.display="none"; });
-
-// ---------- 業種ナレッジ（⑥）：同業クライアント横断で勝ち訴求を集計 ----------
-function renderIndustryOptions(){
-  fillDatalist("industryOptions", Object.values(state.clients).map(c=>c.industry).filter(Boolean));
-}
-function renderKnowledge(){
-  const c=client(), ind=c.industry||"", box=$("knowledgeBox");
-  $("scopeName4").textContent = ind ? "— "+ind : "— 業種未設定";
-  if(!ind){ box.innerHTML='<div class="empty">「③ブランド設計」で業種を設定すると、同じ業種のクライアント横断で勝ちパターンを集計します。</div>'; return; }
-  const sameIndustry = Object.values(state.clients).filter(cl=>(cl.industry||"")===ind);
-  const rows=[];
-  sameIndustry.forEach(cl=> cl.logs.forEach(l=>{ const ctr=num(l.ctr); if(ctr!=null) rows.push({axis:l.axis, ctr}); }));
-  if(!rows.length){ box.innerHTML=`<div class="empty">業種「${ind}」の実測データはまだありません（対象${sameIndustry.length}社）。広告を回してCTRを入力すると、勝ち訴求が自動ランキングされます。</div>`; return; }
-  const byAxis={}; rows.forEach(r=>{ (byAxis[r.axis]=byAxis[r.axis]||[]).push(r.ctr); });
-  const ranked=Object.entries(byAxis).map(([axis,a])=>({axis, avg:a.reduce((x,y)=>x+y,0)/a.length, n:a.length})).sort((x,y)=>y.avg-x.avg);
-  let h=`<p class="hint">業種「<b>${ind}</b>」｜対象${sameIndustry.length}社・実測${rows.length}件から集計（CTR平均が高い訴求＝勝ち筋）</p>`;
-  h+=`<table class="ktable"><thead><tr><th>順位</th><th>訴求軸</th><th>平均CTR%</th><th>件数</th></tr></thead><tbody>`;
-  ranked.forEach((r,i)=>{ h+=`<tr><td>${i+1}</td><td><span class="pill">${r.axis}</span></td><td style="font-weight:700;color:var(--text)">${r.avg.toFixed(2)}</td><td>${r.n}</td></tr>`; });
-  h+=`</tbody></table><p class="hint" style="margin-top:10px">💡 新規クライアントは、この上位の訴求軸から試すと勝率が上がります。</p>`;
-  box.innerHTML=h;
-}
-
-// ---------- 検証ログ（クライアント別／自動判定つき） ----------
-function renderLogs(){
-  const c=client(), logs=c.logs, w=$("logwrap");
-  if(!logs.length){ w.innerHTML='<div class="empty">まだ記録がありません。生成 →「＋ 今の生成を記録」で蓄積します。</div>'; return; }
-  const ref=computeRefs(c);
-  let h=`<table><thead><tr><th>日付</th><th>ターゲット</th><th>訴求軸</th><th>比率</th>
-    <th>CTR%</th><th>CPA¥</th><th>CVR%</th><th>判定 ＆ 次の提案</th><th>考察</th><th></th></tr></thead><tbody>`;
-  logs.forEach((l,i)=>{ const j=judge(l,ref); h+=`<tr>
-    <td>${l.date}</td><td>${l.target}</td><td><span class="pill">${l.axis}</span></td><td>${l.ratio}</td>
-    <td><input class="num" data-i="${i}" data-k="ctr" value="${l.ctr||''}"></td>
-    <td><input class="num" data-i="${i}" data-k="cpa" value="${l.cpa||''}"></td>
-    <td><input class="num" data-i="${i}" data-k="cvr" value="${l.cvr||''}"></td>
-    <td><span class="judge ${j.cls}" title="${j.diag}">${j.grade} ${j.label}</span><br>
-        <button class="propose" data-prop="${i}">💡 次の提案</button></td>
-    <td><input data-i="${i}" data-k="memo" value="${(l.memo||'').replace(/"/g,'&quot;')}" placeholder="何が良かった/悪かった"></td>
-    <td><button class="del" data-del="${i}">✕</button></td></tr>`; });
-  h+=`</tbody></table>`; w.innerHTML=h;
-  w.querySelectorAll("input").forEach(inp=>{
-    inp.addEventListener("input", e=>{ client().logs[e.target.dataset.i][e.target.dataset.k]=e.target.value; save(); });
-    inp.addEventListener("change", e=>{ if(e.target.dataset.k!=="memo"){ renderLogs(); renderKnowledge(); } });
-  });
-  w.querySelectorAll(".del").forEach(btn=> btn.addEventListener("click", e=>{
-    client().logs.splice(e.target.dataset.del,1); save(); renderLogs(); renderKnowledge();
-  }));
-  w.querySelectorAll(".propose").forEach(btn=> btn.addEventListener("click", e=>{
-    openProposal(client().logs[e.target.dataset.prop]);
-  }));
-}
-$("save_log").addEventListener("click", ()=>{
-  if(!current){ alert("先に「プロンプトを生成」を押してください"); return; }
-  client().logs.unshift({ ...current, ctr:"",cpa:"",cvr:"",memo:"" }); save(); renderLogs(); renderSuggestions();
-});
-
-// ---------- 出力 ----------
-$("export").addEventListener("click", ()=>{
-  const logs=client().logs; if(!logs.length){ alert("記録がありません"); return; }
-  const head=["クライアント","日付","ターゲット","訴求軸","比率","オファー","CTR%","CPA円","CVR%","考察","コピープロンプト","画像プロンプト"];
-  const esc=s=>`"${String(s||"").replace(/"/g,'""')}"`;
-  const rows=logs.map(l=>[l.client,l.date,l.target,l.axis,l.ratio,l.offer,l.ctr,l.cpa,l.cvr,l.memo,l.copyPrompt,l.imgPrompt].map(esc).join(","));
-  const csv="﻿"+[head.map(esc).join(","),...rows].join("\n");
-  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download=`banner_${state.active}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
-});
-$("export_md").addEventListener("click", ()=>{
-  const logs=client().logs; if(!logs.length){ alert("記録がありません"); return; }
-  let md=`| クライアント | 日付 | ターゲット | 訴求軸 | 比率 | CTR% | CPA¥ | CVR% | 考察 |\n|---|---|---|---|---|---|---|---|---|\n`;
-  logs.forEach(l=>{ md+=`| ${l.client} | ${l.date} | ${l.target} | ${l.axis} | ${l.ratio} | ${l.ctr||''} | ${l.cpa||''} | ${l.cvr||''} | ${(l.memo||'').replace(/\|/g,'/')} |\n`; });
-  navigator.clipboard.writeText(md).then(()=>{
-    const b=$("export_md"), o=b.textContent; b.textContent="✓ コピー済(Notionに貼る)"; b.classList.add("copied");
-    setTimeout(()=>{ b.textContent=o; b.classList.remove("copied"); },1600);
-  });
-});
-
-// ---------- AIで自動セットアップ（属人化しない: 手順固定） ----------
-const modal = $("aiModal");
-$("openAI").addEventListener("click", ()=>{ modal.style.display="flex"; });
-$("closeAI").addEventListener("click", ()=>{ modal.style.display="none"; });
-modal.addEventListener("click", e=>{ if(e.target===modal) modal.style.display="none"; });
-
+/* ---------- AI自動セットアップ ---------- */
+const aiModal=$("aiModal");
+$("openAI").addEventListener("click", ()=> aiModal.style.display="flex");
+$("closeAI").addEventListener("click", ()=> aiModal.style.display="none");
+aiModal.addEventListener("click", e=>{ if(e.target===aiModal) aiModal.style.display="none"; });
 $("genSetup").addEventListener("click", ()=>{
-  const info = $("svcInfo").value.trim();
-  if(!info){ alert("クライアントのサービス情報を入力してください"); return; }
-  $("setupPrompt").textContent =
-`あなたはブランド戦略とパフォーマンス広告に詳しいアートディレクターです。
-以下のクライアント情報をもとに、AIバナー量産のための「ブランド設計」と「訴求軸×ターゲットのプリセット」を設計してください。
+  const info=$("svcInfo").value.trim(); if(!info){ alert("サービス情報を入力してください"); return; }
+  $("setupPrompt").textContent=
+`あなたはブランド戦略と広告に詳しいアートディレクターです。以下のクライアント情報から、広告バナー生成の初期設定をJSONで出力してください。
 
 # クライアント情報
 ${info}
 
-# 出力形式（重要：下記のJSONだけを出力。前後の説明文・コードフェンスは一切つけない）
+# 出力（このJSONだけ。前後の説明・コードフェンスは付けない）
 {
   "client": "クライアント名（簡潔に）",
-  "industry": "業種・ジャンル（例: 美容医療 / 不動産 / EC / SaaS など短く）",
-  "brand": {
-    "tone": "トーン＆マナーを1文で",
-    "keywords": "世界観キーワードをカンマ区切りで5語",
-    "colors": "ブランドに合うHEXカラーを3〜4色カンマ区切り（例: #FFFFFF, #1A1A1A）",
-    "ng": "広告で避けるべき禁止・誇大表現をカンマ区切り"
-  },
-  "offer": "クリック後の想定オファー（例: 無料相談予約 / 資料DL）",
-  "presets": [
-    {
-      "name": "訴求軸×ターゲットの短い名前",
-      "target": "具体的なターゲット像",
-      "axis": "訴求軸（短く）",
-      "value": "その訴求で伝えたい価値を1文で",
-      "visual": "画像の方向性（被写体・雰囲気・色）を1文で"
-    }
-  ]
+  "industry": "業種・ジャンル（短く）",
+  "tone": "トーン＆マナーを1文",
+  "ng": "禁止・誇大表現をカンマ区切り",
+  "audienceProblem": "誰に（悩み・課題）を1文",
+  "coreValue": "何を（最も伝えたい価値）を1文",
+  "mainCopy": "メインコピー案",
+  "subCopy": "サブコピー案",
+  "baseColor": "#RRGGBB（ベース70%）",
+  "mainColor": "#RRGGBB（メイン25%）",
+  "accentColor": "#RRGGBB（アクセント5%）"
 }
-
-# 条件
-- presets は、このクライアントで効果が見込める切り口を 4〜5個 つくる
-- ターゲットと訴求軸の組み合わせは互いに被らせない
-- 日本語で出力。JSON以外は絶対に出力しない`;
+- 日本語。JSON以外は絶対に出力しない`;
 });
-
 $("importJson").addEventListener("click", ()=>{
-  const raw = $("jsonIn").value.trim();
-  if(!raw){ alert("ChatGPTの出力(JSON)を貼り付けてください"); return; }
-  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
-  if(s<0||e<0){ alert("JSONが見つかりません。{ } を含む出力を貼ってください"); return; }
-  let data;
-  try{ data = JSON.parse(raw.slice(s, e+1)); }
-  catch(err){ alert("JSONの読み取りに失敗しました。ChatGPTの出力をそのまま貼り直してください。\n("+err.message+")"); return; }
-  if(!data.client || !Array.isArray(data.presets) || !data.presets.length){
-    alert("client名と presets（1件以上）が必要です。プロンプトをそのまま使って再生成してください。"); return;
-  }
-  let name = String(data.client);
-  while(state.clients[name]) name += "＿";
-  const b = data.brand || {};
-  const presets = data.presets.map(p=>({
-    name: p.name || `${p.axis||"訴求"}×${String(p.target||"").slice(0,8)}`,
-    target: p.target||"", axis: p.axis||"", value: p.value||"", visual: p.visual||""
-  }));
-  state.clients[name] = {
-    brand: { tone:b.tone||"", keywords:b.keywords||"", colors:b.colors||"", ng:b.ng||"" },
-    draft: {
-      target: presets[0].target, axis: presets[0].axis, value: presets[0].value, visual: presets[0].visual,
-      ratio:"1:1 (1080x1080) 正方形", count:"5", offer: data.offer||""
-    },
-    presets, rules:{copy:[],image:[]}, industry: data.industry||"", targets:{ctr:"",cpa:"",cvr:""}, logs: []
-  };
-  state.active = name; save();
-  modal.style.display="none";
-  $("svcInfo").value=""; $("setupPrompt").textContent="↑ 情報を入れて生成。"; $("jsonIn").value="";
-  renderClientSelect(); loadClientIntoForm();
-  alert(`「${name}」をブランド設定＋プリセット${presets.length}件付きで作成しました！`);
-});
-
-// ---------- ナレッジ共有（知見のみ書き出し/読み込み・属人化解消） ----------
-const shareModal = $("shareModal");
-$("openShare").addEventListener("click", ()=>{ shareModal.style.display="flex"; });
-$("closeShare").addEventListener("click", ()=>{ shareModal.style.display="none"; });
-shareModal.addEventListener("click", e=>{ if(e.target===shareModal) shareModal.style.display="none"; });
-
-$("genShare").addEventListener("click", ()=>{
-  const clients = {};
-  for(const [name,c] of Object.entries(state.clients)){
-    clients[name] = { industry:c.industry, brand:c.brand, presets:c.presets, rules:c.rules }; // ログ・draftは含めない
-  }
-  $("shareOut").textContent = JSON.stringify({
-    type:"banner-tool-knowledge", version:1, exportedAt:new Date().toISOString().slice(0,10), clients
-  }, null, 2);
-});
-
-function uniqPush(arr, val){ if(val && !arr.includes(val)) arr.push(val); }
-
-$("importShare").addEventListener("click", ()=>{
-  const raw = $("shareIn").value.trim();
-  if(!raw){ alert("共有ページのJSONを貼り付けてください"); return; }
+  const raw=$("jsonIn").value.trim(); if(!raw){ alert("JSONを貼り付けてください"); return; }
   const s=raw.indexOf("{"), e=raw.lastIndexOf("}");
   if(s<0||e<0){ alert("JSONが見つかりません"); return; }
-  let data; try{ data = JSON.parse(raw.slice(s,e+1)); }
-  catch(err){ alert("JSONの読み取りに失敗しました。\n("+err.message+")"); return; }
-  if(!data.clients || typeof data.clients!=="object"){ alert("clients が含まれていません。書き出したJSONをそのまま貼ってください。"); return; }
-
-  let newClients=0, addedPresets=0, addedRules=0;
-  for(const [name,inc] of Object.entries(data.clients)){
-    if(!state.clients[name]){
-      // 新規クライアントごと取り込み
-      state.clients[name] = {
-        brand: inc.brand || {tone:"",keywords:"",colors:"",ng:""},
-        draft: { target:(inc.presets&&inc.presets[0]?.target)||"", axis:(inc.presets&&inc.presets[0]?.axis)||"",
-          value:(inc.presets&&inc.presets[0]?.value)||"", visual:(inc.presets&&inc.presets[0]?.visual)||"",
-          ratio:"1:1 (1080x1080) 正方形", count:"5", offer:"" },
-        presets: inc.presets ? inc.presets.slice() : [],
-        rules: { copy:(inc.rules?.copy||[]).slice(), image:(inc.rules?.image||[]).slice() },
-        industry: inc.industry||"", targets:{ctr:"",cpa:"",cvr:""},
-        logs: []
-      };
-      newClients++;
-      addedPresets += state.clients[name].presets.length;
-      addedRules += state.clients[name].rules.copy.length + state.clients[name].rules.image.length;
-    } else {
-      // 既存にマージ（合算・重複除去）
-      const c = state.clients[name];
-      (inc.presets||[]).forEach(p=>{ if(!c.presets.some(x=>x.name===p.name)){ c.presets.push(p); addedPresets++; } });
-      (inc.rules?.copy||[]).forEach(r=>{ const n=c.rules.copy.length; uniqPush(c.rules.copy,r); if(c.rules.copy.length>n) addedRules++; });
-      (inc.rules?.image||[]).forEach(r=>{ const n=c.rules.image.length; uniqPush(c.rules.image,r); if(c.rules.image.length>n) addedRules++; });
-      // ブランドは空欄のみ補完（既存を壊さない）
-      for(const k of ["tone","keywords","colors","ng"]) if(!c.brand[k] && inc.brand?.[k]) c.brand[k]=inc.brand[k];
-      if(!c.industry && inc.industry) c.industry=inc.industry;
-    }
-  }
-  save();
-  shareModal.style.display="none"; $("shareIn").value="";
-  renderClientSelect(); loadClientIntoForm();
-  alert(`取り込み完了！\n新規クライアント: ${newClients}件\n追加プリセット: ${addedPresets}件\n追加ルール: ${addedRules}件`);
+  let d; try{ d=JSON.parse(raw.slice(s,e+1)); }catch(err){ alert("JSON読み取り失敗：\n"+err.message); return; }
+  if(!d.client){ alert("client名が必要です"); return; }
+  let name=String(d.client); while(state.clients[name]) name+="＿";
+  const c=defaultClient();
+  ["industry","tone","ng","audienceProblem","coreValue","mainCopy","subCopy","baseColor","mainColor","accentColor"].forEach(k=>{ if(d[k]) c[k]=d[k]; });
+  state.clients[name]=c; state.active=name; save();
+  aiModal.style.display="none"; $("svcInfo").value=""; $("jsonIn").value=""; $("setupPrompt").textContent="↑ 情報を入れて生成。";
+  renderClientSelect(); loadClient();
+  alert(`「${name}」を作成しました！`);
 });
+document.querySelectorAll(".copy2[data-copy]").forEach(b=> b.addEventListener("click", ()=>{
+  navigator.clipboard.writeText($(b.dataset.copy).textContent);
+  const o=b.textContent; b.textContent="✓ コピー済"; setTimeout(()=>b.textContent=o,1200);
+}));
 
-// ---------- 起動 ----------
-load(); renderClientSelect(); wireInputs(); loadClientIntoForm();
+/* ---------- 起動 ---------- */
+load(); buildPresets(); buildRatio(); buildColors(); wireSimple(); renderClientSelect(); loadClient();
 </script>
 </body>
 </html>
